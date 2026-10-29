@@ -241,3 +241,37 @@ def test_real_http_adapter_against_local_stub():
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_strict_compilation_does_not_duplicate_schema_in_prompt():
+    provider = StubProvider([envelope(invoice_plan().model_dump())])
+    provider.structured = True
+    result = compile_workflow(DEMOS['Invoice review'], inventory(sample_files()), provider, 'one_shot')
+    assert result.workflow is not None
+    assert 'JSON schema:' not in provider.calls[0][0]['content']
+    provider = StubProvider([envelope(invoice_plan().model_dump())])
+    provider.structured = False
+    compile_workflow(DEMOS['Invoice review'], inventory(sample_files()), provider, 'one_shot')
+    assert 'JSON schema:' in provider.calls[0][0]['content']
+
+
+def test_presentation_escapes_uploaded_names_and_workflow_fields():
+    from prompt_compiler.presentation import file_markup, plan_markup
+    rendered = file_markup('<script>alert(1)</script>.txt', {'kind': 'document', 'rows': 1, 'columns': ['text']})
+    assert '<script>' not in rendered and '&lt;script&gt;' in rendered
+    payload = invoice_plan().model_dump()
+    payload['steps'][2]['column'] = '<img src=x onerror=alert(1)>'
+    rendered = plan_markup(Workflow.model_validate(payload))
+    assert '<img' not in rendered and '&lt;img' in rendered
+
+
+def test_strict_schema_uses_closed_objects_and_enum_constants():
+    from prompt_compiler.provider import strict_schema
+    from prompt_compiler.schema import CompilerResponse
+    schema = strict_schema(CompilerResponse.model_json_schema())
+    assert schema['additionalProperties'] is False
+    assert schema['required'] == ['workflow', 'clarification']
+    assert schema['$defs']['Read']['properties']['operation']['enum'] == ['read']
+    assert 'title' not in schema['$defs']['Read']['properties']['id']
+    assert 'title' in schema['$defs']['Workflow']['properties']
+    assert 'title' in schema['$defs']['Workflow']['required']

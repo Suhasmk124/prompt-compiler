@@ -26,16 +26,20 @@ If your machine blocks PowerShell scripts, use those commands directly. For an e
 
 ## Try the offline demo
 
-1. Keep **Offline demo** selected and **Use synthetic sample invoices** enabled.
-2. Choose an example and click **Compile workflow**.
-3. Open **Workflow**, inspect the steps and JSON, then click **Execute workflow**.
-4. Open **Results**, inspect the trace and table, and download the Excel or CSV report.
+1. Keep **Sample workspace** selected and **Sample invoices** enabled.
+2. Choose an example, describe the task, and click **Generate plan**.
+3. Inspect the plain-language plan and click **Run workflow**.
+4. Review the report beside the plan and download the Excel or CSV file.
+
+The main workspace focuses on the task, source files, plan and final report. JSON editing and run traces are available in expanders. Session run summaries and research methodology have separate sidebar pages.
 
 Three exact preset instructions are supported offline: flag high-value invoices, filter high-value invoices, and sum totals by vendor. This mode uses fixed workflow templates and deterministic extraction; it does not pretend to understand arbitrary instructions.
 
 ## Connect an LLM
 
-Copy `.env.example` to `.env` and set your provider base URL, model identifier, and API key, or enter them in the sidebar. Choose **Connected LLM**. Use a Chat Completions-compatible provider with JSON Schema support; switch off strict schema mode if it supports JSON mode only. Model compatibility varies, including support for `temperature=0`.
+Start with **Connected model → Groq**, using the preset GPT-OSS 20B model and your own API key. See `docs/model-setup.md` for verified free-tier limits and setup. Standard planning uses one request; decomposition and feedback use more. Live accuracy has not yet been measured.
+
+Alternatively copy `.env.example` to `.env` and set your provider base URL, model identifier, and API key, or choose Custom endpoint in the sidebar. Use a Chat Completions-compatible provider with JSON Schema support; switch off strict schema mode if it supports JSON mode only. Model compatibility varies, including support for `temperature=0`.
 
 The UI requires you to acknowledge the configured destination before sending a request. Compilation sends the instruction, filenames, table column names and row counts. It does **not** send uploaded document contents. Document extraction and execution happen locally. No web search or arbitrary generated-code execution is available. Remote providers require HTTPS; localhost HTTP is supported. Keys are not logged or written by the UI.
 

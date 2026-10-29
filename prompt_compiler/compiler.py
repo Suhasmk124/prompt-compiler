@@ -48,8 +48,11 @@ def compile_workflow(instruction, manifest, provider=None, strategy='feedback', 
             result.attempts.append({'attempt': 1, 'schema_valid': True, 'semantic_valid': True, 'errors': []})
         else:
             schema = strict_schema(CompilerResponse.model_json_schema())
-            context = json.dumps({'instruction': instruction, 'uploaded_files': manifest}, ensure_ascii=False)
-            messages = [{'role': 'system', 'content': SYSTEM + '\nJSON schema:\n' + json.dumps(schema)},
+            context = json.dumps({'instruction': instruction, 'uploaded_files': manifest}, ensure_ascii=False, separators=(',', ':'))
+            # Strict providers already receive the schema in response_format. Avoid paying
+            # for a duplicate copy in the system message on every generation and retry.
+            schema_hint = '' if getattr(provider, 'structured', False) else '\nJSON schema:\n' + json.dumps(schema, separators=(',', ':'))
+            messages = [{'role': 'system', 'content': SYSTEM + schema_hint},
                         {'role': 'user', 'content': context}]
             if strategy != 'one_shot':
                 reply = provider.complete([{'role': 'system', 'content': 'Decompose the task into supported operations from this specification. Identify missing information. Return a concise operation plan, not private reasoning.\n' + SYSTEM},

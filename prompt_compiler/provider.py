@@ -55,6 +55,8 @@ class Provider:
             usage = result.get('usage', {})
             return Reply(message['content'], usage.get('prompt_tokens', 0), usage.get('completion_tokens', 0))
         except urllib.error.HTTPError as exc:
+            if exc.code == 429:
+                raise ValueError('The provider’s free-tier or rate limit was reached. Wait before trying again, or check your account’s remaining quota. No automatic paid upgrade was made.') from None
             raise ValueError(f'Provider HTTP {exc.code}. Check endpoint, key, model, and structured-output support. Provider response omitted to protect credentials.') from None
         except (urllib.error.URLError, TimeoutError):
             raise ValueError('Provider connection failed or timed out. Check endpoint and connectivity.') from None
@@ -63,7 +65,10 @@ class Provider:
 def strict_schema(schema):
     """Make all object properties required for strict structured-output providers."""
     if isinstance(schema, dict):
-        schema = {k: strict_schema(v) for k, v in schema.items() if k not in {'discriminator', 'default'}}
+        schema = {k: strict_schema(v) for k, v in schema.items()
+                  if k not in {'discriminator', 'default'} and not (k == 'title' and isinstance(v, str))}
+        if 'const' in schema:
+            schema['enum'] = [schema.pop('const')]
         if schema.get('type') == 'object':
             schema['additionalProperties'] = False
             schema['required'] = list(schema.get('properties', {}))

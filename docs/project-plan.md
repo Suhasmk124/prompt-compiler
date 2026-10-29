@@ -2,28 +2,53 @@
 
 ## Research question
 
-Does task decomposition with schema validation and bounded correction feedback improve held-out workflow and output correctness over one-shot generation?
+Does task decomposition with schema validation and bounded correction feedback improve workflow and output correctness over one-shot generation on held-out tasks?
 
-## Build order
+## Architecture
 
-1. Specify node IDs, operation names, typed parameters, input references, and outputs. Reject cycles, missing references, invalid fields, and unsupported operations.
-2. Implement predefined operations and validate their inputs and outputs. Keep file access within the selected input and output directories.
-3. Create synthetic fixtures and manually verified expected outputs. Include threshold boundaries, missing fields, malformed values, empty inputs, and ambiguous instructions.
-4. Add structured workflow generation and record baseline results.
-5. Add decomposition and validation feedback with bounded retries. Preserve prompt versions and execution traces.
-6. Add a visual workflow, node status display, and downloadable reports.
-7. Evaluate on held-out tasks and assemble the presentation and report.
+Instruction + uploaded-file inventory -> optional operation decomposition -> schema-constrained generation -> graph and column validation -> bounded feedback correction -> user inspection -> deterministic execution -> export verification and audit.
 
-## Evaluation design
+The typed workflow is the intermediate representation. Read nodes bind input names; transform nodes consume earlier node outputs; export nodes are terminal. The compiler never generates arbitrary executable code. Validation and execution are separate so the same workflow can be inspected, edited, saved and rerun.
 
-Split by instruction template before prompt tuning to reduce leakage. Compare the same tasks across all conditions. A valid JSON workflow can still be semantically wrong; a successful execution can still produce an incorrect report. Measure each separately.
+## Implemented first milestone
 
-Use deterministic reference checks for filters, calculations, flags, and exported cells. Define manual correction as a human edit to the generated workflow or instruction needed to complete the task; distinguish this from automatic retries. Report ambiguity and unsupported-task handling separately.
+- Discriminated node schemas, graph validation and schema propagation.
+- CSV/XLSX/document reading; labeled invoice extraction; predicates, arithmetic, grouping, selection and sorting.
+- Memory-based Excel/CSV exports and per-node execution traces.
+- Offline preset mode and configurable LLM compilation with three strategies.
+- Editable workflow UI and explicit execution.
+- Controlled compiler tests and deterministic development benchmarks.
 
-## Deliverables
+## Remaining research work
 
-Problem statement and literature survey; workflow schema and architecture; synthetic benchmark and reference outputs; baseline and correction pipelines; interactive demo; reproducible evaluation; final report.
+1. Conduct and document a literature survey on natural-language planning, structured generation and feedback-guided correction.
+2. Expand beyond the three development fixtures to a manually verified task corpus. Include simple tasks, multi-step tasks, ambiguous requests, unsupported requests, and failure cases.
+3. Split by instruction template before prompt tuning. Keep test tasks and gold outputs separate from development feedback.
+4. Fix a model, sampling configuration, schema, retry budget, and prompt versions. Run each strategy on identical tasks and repeat when evaluating variability.
+5. Measure first-attempt validity, final validity, operation/parameter correctness, execution success, reference output correctness, automatic retries, actual human edits, latency and cost.
+6. Inspect failures and report negative findings. No guaranteed improvement is assumed.
 
-## Scope boundaries
+The starter benchmark checks key operations and parameters but does not establish general semantic equivalence. Its output gold checks must be expanded to the full selected task scope before making final research claims.
 
-Start with text-based documents and CSV/XLSX inputs. Scanned-image OCR, arbitrary web automation, external account integrations, and general-purpose code execution are stretch goals outside the first version.
+## Review mapping
+
+The supplied UE24AM343AB5 guidelines specify four-person teams, three reviews, and a 10-page IEEE-format report.
+
+| Review | Guideline focus | Project evidence |
+| --- | --- | --- |
+| R1 | Idea and literature survey | Problem, scope, research question, reviewed sources |
+| R2 | High-level design and data collection | Schema, compiler/executor architecture, dataset manifest and baseline |
+| R3 | Final demo | UI acceptance, live-model experiments, comparisons, limitations |
+
+The document lists September 21–28, October 19–25 and November 16–21, without a year. Confirm the applicable dates with faculty; do not assume a fresh 12-week window.
+
+## Suggested four-person ownership
+
+1. Workflow schema, compiler, prompt variants and correction loop.
+2. Operation executor, input adapters and output checks.
+3. Task dataset, reference outputs, evaluation and error analysis.
+4. UI acceptance, documentation, presentation and report integration.
+
+## Completion criteria
+
+The initial runnable app is not the final academic submission. Completion requires owner-run UI verification, configured live-model trials, a held-out benchmark, actual measured results, literature survey, presentation and the IEEE report.

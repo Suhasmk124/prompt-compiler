@@ -12,4 +12,4 @@ if (-not (Test-Path -LiteralPath $stampPath) -or (Get-Content -LiteralPath $stam
     if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed.' }
     Set-Content -LiteralPath $stampPath -Value $requirementsHash
 }
-& $projectPython -m streamlit run app.py
+& $projectPython run_app.py

@@ -6,3 +6,5 @@
 - Keep offline preset behavior clearly labeled. Do not present deterministic sample results as LLM benchmark results.
 - Never commit credentials, uploaded invoices, personal data, local environments, or generated run logs.
 - Preserve separation between schema validity, semantic workflow checks, execution success, and final-output correctness.
+- Keep provider configuration and credentials exclusively in the local `.env`; do not display key, endpoint or model entry fields in the UI.
+- Do not make live model/API requests until the owner explicitly authorizes them again. The latest UI/local-feature task prohibits them.

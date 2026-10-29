@@ -2,17 +2,17 @@
 
 Recommendation for initial development: GPT-OSS 20B on Groq, model ID `openai/gpt-oss-20b`.
 
-It is a hosted open-weight model with a free API plan and strict structured-output support. This is a suitability recommendation based on the API contract, not a claim of measured accuracy on our task dataset. Live-model evaluation is still required.
+It is a hosted open-weight model with a free API plan and strict structured-output support. Three development tasks previously passed with planning and correction enabled; broader held-out evaluation is still required.
 
 ## Configure
 
 1. Create an API key in your own Groq account: https://console.groq.com/keys
-2. In Prompt Compiler, select **Connected model**, then **Groq** in the sidebar.
-3. Leave the default endpoint `https://api.groq.com/openai/v1` and model `openai/gpt-oss-20b`.
-4. Enter your key in the password field, keep strict structured output enabled, and acknowledge sending your instruction and file metadata.
-5. Start with **Workflow preferences → Plan + self-correction**, the default verified against all three development tasks with the live model. It uses decomposition and generation, with additional requests only if validation retries are needed. Standard uses one request per compilation and is available as a cheaper experimental baseline; its reliability can differ.
+2. If no `.env` exists, copy `.env.example` to `.env` locally. Configure `LLM_BASE_URL`, `LLM_MODEL` and `LLM_API_KEY` there.
+3. For Groq use `https://api.groq.com/openai/v1`, `openai/gpt-oss-20b` and `LLM_STRUCTURED=true`.
+4. Restart with `.\.venv\Scripts\python.exe run_app.py` and turn Sample mode off. The app shows configuration status, not credentials or setup fields.
+5. Use **Planning preferences → Plan + self-correction**, the live-tested default. Standard uses fewer requests but reliability can differ.
 
-Alternatively copy `.env.example` to `.env` locally and fill in `LLM_API_KEY`. Never commit the real `.env`. The UI does not save entered keys to disk. No Groq account, key, billing plan, or paid upgrade is created automatically by this app.
+Never commit the real `.env` or paste keys into workflow instructions. Credentials are never rendered as browser widgets. No account, key, billing plan or paid upgrade is created automatically.
 
 ## Limits checked October 29, 2026
 

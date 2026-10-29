@@ -264,7 +264,8 @@ def test_presentation_escapes_uploaded_names_and_workflow_fields():
     payload = invoice_plan().model_dump()
     payload['steps'][2]['column'] = '<img src=x onerror=alert(1)>'
     rendered = plan_markup(Workflow.model_validate(payload))
-    assert '<img' not in rendered and '&lt;img' in rendered
+    assert '<img' not in rendered and 'onerror' not in rendered
+    assert 'FROM ' not in rendered and '<p>' not in rendered
 
 
 def test_strict_schema_uses_closed_objects_and_enum_constants():

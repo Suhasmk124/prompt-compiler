@@ -37,16 +37,14 @@ def describe_step(step):
 
 def plan_markup(workflow, trace=()):
     statuses = {row['node']: row['status'] for row in trace}
-    names = {step.id: OP_NAMES[step.operation] for step in workflow.steps}
     cards = []
     for index, step in enumerate(workflow.steps, 1):
         status = statuses.get(step.id, 'ready')
         badge = {'success': 'Complete', 'failed': 'Needs attention', 'ready': 'Ready'}[status]
-        source = names.get(getattr(step, 'source', ''), 'Your files')
         cards.append(f'''<div class="flow-node {status}">
           <div class="node-index">{index:02d}</div>
           <div class="node-copy"><div class="node-heading">{escape(OP_NAMES[step.operation])}<span class="node-status">{badge}</span></div>
-          <p>{escape(describe_step(step))}</p><div class="node-source">FROM {escape(source)}</div></div></div>''')
+          </div></div>''')
     return '<div class="flow-list">' + ''.join(cards) + '</div>'
 
 

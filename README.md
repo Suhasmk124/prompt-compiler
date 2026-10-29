@@ -4,7 +4,7 @@
 
 A local prompt-engineering application that compiles instructions into typed workflows, validates their dependencies, executes predefined document and spreadsheet operations, and produces downloadable reports with an execution trace.
 
-**Current status:** Working first implementation with an offline invoice demo, an optional Chat Completions-compatible LLM adapter, workflow editing, a deterministic executor, and a development benchmark. Browser/UI acceptance and live-model evaluation are pending.
+**Current status:** Runnable local application with sample tasks, a model-backed compiler, workflow import/editing, file previews, searchable reports and ZIP exports. Three live development tasks previously passed; broader evaluation remains pending. UI acceptance belongs to the project owner.
 
 ## Run on Windows
 
@@ -19,31 +19,33 @@ The launcher creates a local `.venv` and installs `requirements.txt` if needed, 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m streamlit run app.py
+.\.venv\Scripts\python.exe run_app.py
 ```
 
 If your machine blocks PowerShell scripts, use those commands directly. For an existing environment, skip its creation and dependency installation.
 
 ## Try the offline demo
 
-1. Keep **Sample workspace** selected and **Sample invoices** enabled.
+1. Keep **Sample mode** enabled and click **Try sample invoices** if needed.
 2. Choose an example, describe the task, and click **Generate plan**.
-3. Inspect the plain-language plan and click **Run workflow**.
+3. Inspect the compact workflow steps and click **Run workflow**.
 4. Review the report beside the plan and download the Excel or CSV file.
 
 The main workspace focuses on the task, source files, plan and final report. JSON editing and run traces are available in expanders. Session run summaries and research methodology have separate sidebar pages.
+
+Upload directly into the drop zone; uploads replace the sample pack. Preview documents or the first 100 table rows locally. Search filters the report preview only; matching rows can be downloaded separately. Download everything packages the executed plan, audit and reports into one ZIP. Saved workflow JSON can be imported and run without model calls when its filenames and columns match the inputs.
 
 Three exact preset instructions are supported offline: flag high-value invoices, filter high-value invoices, and sum totals by vendor. This mode uses fixed workflow templates and deterministic extraction; it does not pretend to understand arbitrary instructions.
 
 ## Connect an LLM
 
-Start with **Connected model → Groq**, using the preset GPT-OSS 20B model and your own API key. See `docs/model-setup.md` for verified free-tier limits and setup. Standard planning uses one request; decomposition and feedback use more. Live accuracy has not yet been measured.
+Configure your model in the local `.env` file, then turn **Sample mode** off. Credentials, endpoints and model configuration are not rendered as UI fields. See `docs/model-setup.md`. Prior live smoke-test results are in `docs/live-validation.md`; they are not general accuracy claims.
 
-Alternatively copy `.env.example` to `.env` and set your provider base URL, model identifier, and API key, or choose Custom endpoint in the sidebar. Use a Chat Completions-compatible provider with JSON Schema support; switch off strict schema mode if it supports JSON mode only. Model compatibility varies, including support for `temperature=0`.
+Copy `.env.example` to `.env` only if no local `.env` exists. Set the endpoint, model and key there. Use a Chat Completions-compatible provider with JSON Schema support; set `LLM_STRUCTURED=false` for JSON mode only. Model compatibility varies, including support for `temperature=0`.
 
-The UI requires you to acknowledge the configured destination before sending a request. Compilation sends the instruction, filenames, table column names and row counts. It does **not** send uploaded document contents. Document extraction and execution happen locally. No web search or arbitrary generated-code execution is available. Remote providers require HTTPS; localhost HTTP is supported. Keys are not logged or written by the UI.
+Generating a plan with Sample mode off sends the instruction, filenames, table column names and row counts to the locally configured provider. The UI explains this beside the generation button. Uploaded document contents stay local. No web search or arbitrary generated-code execution is available. Keys are not logged, written or displayed by the UI.
 
-LLM calls may incur charges. No live API calls were used to validate this implementation; the provider interface and correction loop are tested using controlled responses.
+Model calls use your provider plan. No live API requests were made during the latest UI/local-feature changes. The latest offline checks also exclude the mock HTTP test, making no HTTP requests at all.
 
 ## Supported operations
 
@@ -90,6 +92,10 @@ Save a workflow from the UI and place inputs in a directory:
 ```
 
 Existing output files are not overwritten. Workflow generation is available in the UI; this command executes an already compiled workflow.
+
+## Windows startup
+
+Use `run_app.py` or `start.ps1` rather than invoking Streamlit directly. The launcher selects a Windows socket event-loop policy to avoid the Proactor shutdown callback involved in the reported WinError 10054. This is a targeted mitigation, not suppression of errors. See `docs/troubleshooting.md`. The preset warning is separately fixed by initializing the select box from state without a competing explicit default.
 
 ## Project materials
 

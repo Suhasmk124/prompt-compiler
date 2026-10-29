@@ -43,7 +43,7 @@ def plan_markup(workflow, trace=()):
         badge = {'success': 'Complete', 'failed': 'Needs attention', 'ready': 'Ready'}[status]
         cards.append(f'''<div class="flow-node {status}">
           <div class="node-index">{index:02d}</div>
-          <div class="node-copy"><div class="node-heading">{escape(OP_NAMES[step.operation])}<span class="node-status">{badge}</span></div>
+          <div class="node-copy"><div class="node-heading">{escape(OP_NAMES[step.operation])}<span class="node-state {status}" title="{badge}" aria-label="{badge}"></span></div>
           </div></div>''')
     return '<div class="flow-list">' + ''.join(cards) + '</div>'
 

@@ -18,11 +18,12 @@ from prompt_compiler.compiler import Compilation, compile_workflow
 from prompt_compiler.demo import DEMOS, sample_files
 from prompt_compiler.executor import execute, export_table
 from prompt_compiler.files import inventory, read_file
-from prompt_compiler.presentation import plan_markup, progress_markup
+from prompt_compiler.presentation import COMPARISONS, plan_markup, progress_markup
 from prompt_compiler.provider import Provider
 from prompt_compiler.schema import Workflow
 from prompt_compiler.validation import validate_workflow
-from prompt_compiler.workspace_tools import build_bundle, import_workflow, search_table
+from prompt_compiler.workspace_tools import (build_bundle, compare_tables, parse_workflow, remap_inputs,
+                                            retain_snapshot, search_table, update_parameters)
 
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / '.env')
@@ -43,7 +44,7 @@ def section(kicker, title):
     st.subheader(title)
 
 
-PLAN_STATE = ['compilation', 'run', 'workflow_editor', 'workflow_draft', 'validated_editor', 'manual_edits', 'executed_workflow', 'report_search']
+PLAN_STATE = ['compilation', 'run', 'workflow_editor', 'workflow_draft', 'validated_editor', 'manual_edits', 'executed_workflow', 'report_search', 'active_run_id', 'snapshot_notice']
 
 
 def clear_plan():
@@ -149,6 +150,78 @@ def audit_payload(compilation, run):
             'manual_workflow_edit_present': st.session_state.get('manual_edits', 0)}
 
 
+def comparison_panel(run):
+    if run.error:
+        return
+    previous = [s for s in st.session_state.get('snapshots', []) if s.id != st.session_state.get('active_run_id')]
+    if not previous:
+        if st.session_state.get('snapshot_notice'):
+            st.caption('Report is too large for session comparison; your downloads are still available.')
+        return
+    with st.expander('Compare with an earlier run'):
+        by_id = {snapshot.id: snapshot for snapshot in previous}
+        selected = st.selectbox('Earlier result', list(by_id), format_func=lambda sid: f'{by_id[sid].title} · {by_id[sid].timestamp} · {sid[:4]}')
+        old = by_id[selected]
+        frame = next(reversed(run.tables.values()))
+        diff = compare_tables(old.frame, frame)
+        if old.input_fingerprint != st.session_state.get('current_input_fingerprint'):
+            st.caption('These runs used different inputs; differences may come from the data as well as the plan.')
+        if not diff['comparable']:
+            st.info('The report columns differ. Row comparison is unavailable.')
+            st.write({'Added columns': diff['added_columns'], 'Removed columns': diff['removed_columns']})
+        else:
+            columns = st.columns(3)
+            columns[0].metric('Unchanged', diff['unchanged_rows'])
+            columns[1].metric('Added', diff['added_rows'])
+            columns[2].metric('Removed', diff['removed_rows'])
+            st.caption('A changed row counts as one removal and one addition. Row order is ignored; duplicates count separately.')
+            added_tab, removed_tab = st.tabs(['Added rows', 'Removed rows'])
+            with added_tab:
+                st.dataframe(diff['added_preview'], hide_index=True, width='stretch')
+            with removed_tab:
+                st.dataframe(diff['removed_preview'], hide_index=True, width='stretch')
+            st.caption('Up to 100 rows shown per side. Comparison uses the final report table.')
+        summary = {name: value for name, value in diff.items() if not name.endswith('_preview')}
+        st.download_button('Save comparison · JSON', json.dumps(summary, indent=2), 'comparison.json', mime='application/json')
+
+
+def rule_controls(manifest):
+    try:
+        workflow = Workflow.model_validate_json(st.session_state.get('workflow_editor') or st.session_state['workflow_draft'])
+    except ValueError:
+        return
+    digest = hashlib.sha256(workflow.model_dump_json().encode()).hexdigest()[:10]
+    with st.expander('Adjust rules & output names'):
+        with st.form('parameters_' + digest):
+            updates = {}
+            for step in workflow.steps:
+                prefix = digest + '_' + step.id
+                if step.operation in {'flag', 'filter'}:
+                    st.text(step.label)
+                    comparison = st.selectbox('Comparison · ' + step.column, list(COMPARISONS),
+                        index=list(COMPARISONS).index(step.comparison), format_func=lambda item: COMPARISONS[item], key=prefix + '_comparison')
+                    if isinstance(step.value, bool):
+                        value = st.checkbox('Match value', value=step.value, key=prefix + '_value')
+                    elif isinstance(step.value, (int, float)):
+                        value = st.number_input('Threshold · ' + step.column, value=float(step.value), step=1.0, key=prefix + '_value')
+                    else:
+                        value = st.text_input('Match value · ' + step.column, value=step.value, key=prefix + '_value')
+                    updates[step.id] = {'comparison': comparison, 'value': value}
+                elif step.operation == 'export':
+                    filename = st.text_input('Report filename', value=step.filename, key=prefix + '_filename')
+                    updates[step.id] = {'filename': filename}
+            if st.form_submit_button('Apply changes · no model call', width='stretch'):
+                try:
+                    revised = update_parameters(workflow, updates, manifest)
+                    st.session_state['workflow_editor'] = revised.model_dump_json(indent=2)
+                    st.session_state['workflow_draft'] = st.session_state['workflow_editor']
+                    for name in ['run', 'validated_editor', 'executed_workflow', 'active_run_id', 'report_search']:
+                        st.session_state.pop(name, None)
+                    st.success('Plan updated. Run it to create a new report.')
+                except ValueError as exc:
+                    st.error(str(exc))
+
+
 def results_panel(compilation, run):
     section('THE GOOD STUFF', 'Your report')
     if not run:
@@ -177,6 +250,7 @@ def results_panel(compilation, run):
         saved = Workflow.model_validate(st.session_state['executed_workflow'])
         bundle = build_bundle(run.artifacts, saved, audit_payload(compilation, run))
         st.download_button('Download everything · ZIP', bundle, 'workflow_run.zip', mime='application/zip', width='stretch')
+    comparison_panel(run)
     with st.expander('Run details'):
         st.dataframe(run.trace, hide_index=True, width='stretch')
         if run.tables:
@@ -279,9 +353,20 @@ def workspace(settings):
                     st.error(str(exc))
             with st.expander('Have a saved workflow?'):
                 imported = st.file_uploader('Load workflow JSON', type=['json'], key='import_json')
-                if st.button('Load plan · no model call', disabled=imported is None or not manifest or bool(file_error)):
+                saved, bindings = None, {}
+                if imported is not None:
                     try:
-                        saved = import_workflow(imported.getvalue(), manifest)
+                        saved = parse_workflow(imported.getvalue())
+                        signature = hashlib.sha256(imported.getvalue() + json.dumps(sorted(manifest)).encode()).hexdigest()[:10]
+                        for step in saved.steps:
+                            if step.operation == 'read':
+                                bindings[step.id] = st.multiselect('Files for ' + step.label, list(manifest),
+                                    default=[name for name in step.files if name in manifest], key='binding_' + signature + '_' + step.id)
+                    except ValueError as exc:
+                        st.error(str(exc))
+                if st.button('Load plan · no model call', disabled=saved is None or not manifest or bool(file_error)):
+                    try:
+                        saved = remap_inputs(saved, bindings, manifest)
                         clear_plan()
                         st.session_state['compilation'] = Compilation(workflow=saved, mode='imported')
                         st.session_state['workflow_editor'] = saved.model_dump_json(indent=2)
@@ -298,9 +383,8 @@ def workspace(settings):
             section('THE PLAN', compilation.workflow.title if compilation and compilation.workflow else 'Ready, set, workflow')
             current, editor = None, None
             if compilation and compilation.workflow:
-                if compilation.mode == 'imported':
-                    st.caption('Saved plan · runs locally without model calls')
                 st.session_state.setdefault('workflow_editor', st.session_state.get('workflow_draft', compilation.workflow.model_dump_json(indent=2)))
+                rule_controls(manifest)
                 with st.expander('Edit or save plan'):
                     editor = st.text_area('Workflow JSON', key='workflow_editor', height=360, on_change=save_workflow)
                     st.download_button('Save plan · JSON', editor, 'workflow.json', mime='application/json')
@@ -321,9 +405,16 @@ def workspace(settings):
                         st.session_state['validated_editor'] = editor
                         st.session_state['executed_workflow'] = current.model_dump()
                         st.session_state['manual_edits'] = int(editor != compilation.workflow.model_dump_json(indent=2))
+                        timestamp = datetime.now(ZoneInfo('Asia/Kolkata')).strftime('%H:%M:%S IST')
+                        input_fingerprint = hashlib.sha256(json.dumps({n: hashlib.sha256(b).hexdigest() for n, b in files.items()}, sort_keys=True).encode()).hexdigest()
+                        st.session_state['current_input_fingerprint'] = input_fingerprint
+                        snapshots, snapshot = retain_snapshot(st.session_state.get('snapshots', []), current, run, timestamp, input_fingerprint)
+                        st.session_state['snapshots'] = snapshots
+                        st.session_state['active_run_id'] = snapshot.id if snapshot else None
+                        st.session_state['snapshot_notice'] = run.error is None and snapshot is None
                         history = st.session_state.setdefault('run_history', [])
                         history.insert(0, {'Workflow': current.title, 'Status': 'Needs attention' if run.error else 'Completed',
-                            'Time': datetime.now(ZoneInfo('Asia/Kolkata')).strftime('%H:%M:%S IST'), 'Files created': len(run.artifacts),
+                            'Time': timestamp, 'Files created': len(run.artifacts),
                             'Steps completed': sum(t['status'] == 'success' for t in run.trace)})
                         del history[20:]
                         st.session_state.pop('report_search', None)

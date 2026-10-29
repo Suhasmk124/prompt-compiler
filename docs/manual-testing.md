@@ -32,3 +32,16 @@ Browser verification belongs to the project owner. The coding agent has not perf
 8. Visit Run history and Research, then return. Current task, files, edits and result should persist.
 9. New workflow clears current files, task and output while retaining session history.
 10. Check narrow-window layout, readable contrast, compact cards, focus visibility and the decorative header.
+
+## Reuse and comparison
+
+1. Save the Invoice review plan. Upload a new compatible invoice with a different filename.
+2. Import the saved JSON, bind its read step to the new filename and load. No model call should occur.
+3. Try an empty binding or incompatible CSV schema and verify validation blocks loading.
+4. Restore samples and generate/run Invoice review. Open Adjust rules & output names and change gt to gte at 50,000.
+5. Apply changes: the old report should disappear. Run again; the 50,000 flag should now be true.
+6. Compare with the earlier run. Expect three unchanged rows, one addition and one removal.
+7. Rename the output to revised.csv and rerun. Check the CSV download and bundled workflow match the updated plan.
+8. Try an output filename containing ../ and verify rejection without changing the previous valid plan.
+9. Run a different report schema, then compare. Expect a column-change message rather than a misleading row comparison.
+10. Verify only step names and small status dots remain on workflow cards; no repeated Ready labels or descriptive paragraphs.

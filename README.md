@@ -35,6 +35,14 @@ The main workspace focuses on the task, source files, plan and final report. JSO
 
 Upload directly into the drop zone; uploads replace the sample pack. Preview documents or the first 100 table rows locally. Search filters the report preview only; matching rows can be downloaded separately. Download everything packages the executed plan, audit and reports into one ZIP. Saved workflow JSON can be imported and run without model calls when its filenames and columns match the inputs.
 
+### Reuse a plan without regenerating it
+
+- Import saved workflow JSON and explicitly bind each read step to the current uploads. New filenames and batch sizes are supported when the input schemas match.
+- Open **Adjust rules & output names** to change filter/flag thresholds, comparison operators, and report filenames or formats. Changes are validated and clear the old report; rerun locally to get the revised output.
+- After two successful runs, open **Compare with an earlier run** in the report panel. Comparison ignores row order, preserves duplicate counts, shows additions/removals, and reports schema differences. A modified row appears as a removal and an addition.
+
+Comparison snapshots retain only the final report table, not every intermediate result. They stay in session memory, survive New workflow, and are limited to five snapshots, approximately 20 MB total, with 4 MB per report. Larger reports remain downloadable but are not saved for comparison. No snapshot files are automatically written. See `docs/reusing-workflows.md`.
+
 Three exact preset instructions are supported offline: flag high-value invoices, filter high-value invoices, and sum totals by vendor. This mode uses fixed workflow templates and deterministic extraction; it does not pretend to understand arbitrary instructions.
 
 ## Connect an LLM

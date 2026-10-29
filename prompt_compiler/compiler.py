@@ -9,7 +9,7 @@ from .demo import demo_workflow
 SYSTEM = '''You compile a user's instruction into a workflow, not arbitrary code.
 Return only a JSON object satisfying the provided schema. Only use uploaded filenames and available columns.
 Read operations concatenate files with identical columns. Sources must reference earlier node IDs.
-extract_invoices accepts document rows (source_file,text) and uses labeled Vendor/Supplier, Total/Grand Total/Invoice Total, and explicit INR/USD/EUR currency. One invoice per document. It is deterministic, not a general extractor.
+extract_invoices accepts document rows (source_file,text) and uses labeled Vendor/Supplier, Total/Grand Total/Invoice Total/Amount due, and explicit INR/USD/EUR currency. One invoice per document. It is deterministic, not a general extractor.
 Its output columns are EXACTLY source_file (string), vendor (string or null), total (number or null), currency (string or null), extraction_status (ok or needs_review). All downstream references must use these exact lowercase names. Input labels such as Vendor/Supplier and Total/Grand Total/Invoice Total are parsing patterns, NEVER column names.
 filter removes nonmatching rows; flag preserves all rows and appends a boolean column. Use gt for "above", gte for "at least". Do not confuse flags with filters.
 calculate uses existing numeric columns and arithmetic only. aggregate supports grouping and one aggregation.

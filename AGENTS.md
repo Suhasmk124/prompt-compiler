@@ -7,4 +7,5 @@
 - Never commit credentials, uploaded invoices, personal data, local environments, or generated run logs.
 - Preserve separation between schema validity, semantic workflow checks, execution success, and final-output correctness.
 - Keep provider configuration and credentials exclusively in the local `.env`; do not display key, endpoint or model entry fields in the UI.
-- Do not make live model/API requests until the owner explicitly authorizes them again. The latest UI/local-feature task prohibits them.
+- Make live model/API requests only when explicitly authorized for the current task. The owner authorized the new PDF integration check; this does not permit automatic startup requests or live calls from regression tests.
+- The product has no offline compiler mode. New plans use the configured model; imported plans and local parameter edits do not require regeneration. Keep deterministic test fixtures isolated from product behavior.

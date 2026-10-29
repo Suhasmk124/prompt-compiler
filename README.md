@@ -24,16 +24,15 @@ python -m venv .venv
 
 If your machine blocks PowerShell scripts, use those commands directly. For an existing environment, skip its creation and dependency installation.
 
-## Try the offline demo
+## Guided workspace
 
-1. Keep **Sample mode** enabled and click **Try sample invoices** if needed.
-2. Choose an example, describe the task, and click **Generate plan**.
-3. Inspect the compact workflow steps and click **Run workflow**.
-4. Review the report beside the plan and download the Excel or CSV file.
+1. Upload your files or select **Try example PDF**, then write a task and click **Generate plan**. Generation always uses the configured model.
+2. The workspace advances to **Review**, showing only the plan. Adjust rules or inspect JSON, then click **Run workflow**.
+3. A successful execution advances to **Report**, with search, downloads and comparisons. **Adjust plan** goes back without another model call.
 
-The main workspace focuses on the task, source files, plan and final report. JSON editing and run traces are available in expanders. Session run summaries and research methodology have separate sidebar pages.
+Only the current stage is shown; future-stage empty boxes do not occupy the page. Back navigation preserves the task, files, plan and current report until an edit invalidates them. Transitions, step entrances and decorative motion respect reduced-motion preferences. Browser verification belongs to the project owner.
 
-Upload directly into the drop zone; uploads replace the sample pack. Preview documents or the first 100 table rows locally. Search filters the report preview only; matching rows can be downloaded separately. Download everything packages the executed plan, audit and reports into one ZIP. Saved workflow JSON can be imported and run without model calls when its filenames and columns match the inputs.
+Upload directly into the drop zone. Preview documents or the first 100 table rows locally. Search filters the report preview only; matching rows can be downloaded separately. Download everything packages the executed plan, audit and reports into one ZIP. Saved workflow JSON can be imported with explicit bindings and executed locally without regenerating it.
 
 ### Reuse a plan without regenerating it
 
@@ -43,17 +42,17 @@ Upload directly into the drop zone; uploads replace the sample pack. Preview doc
 
 Comparison snapshots retain only the final report table, not every intermediate result. They stay in session memory, survive New workflow, and are limited to five snapshots, approximately 20 MB total, with 4 MB per report. Larger reports remain downloadable but are not saved for comparison. No snapshot files are automatically written. See `docs/reusing-workflows.md`.
 
-Three exact preset instructions are supported offline: flag high-value invoices, filter high-value invoices, and sum totals by vendor. This mode uses fixed workflow templates and deterministic extraction; it does not pretend to understand arbitrary instructions.
+The product has no offline/demo compiler mode or automatic preset fallback. Quick-start instructions are prompts for the actual model, not precompiled plans. Deterministic fixtures remain available only for backend regression checks and the explicitly labeled CLI development benchmark.
 
 ## Connect an LLM
 
-Configure your model in the local `.env` file, then turn **Sample mode** off. Credentials, endpoints and model configuration are not rendered as UI fields. See `docs/model-setup.md`. Prior live smoke-test results are in `docs/live-validation.md`; they are not general accuracy claims.
+Configure your model in the local `.env` file and restart. Credentials, endpoints and model configuration are not rendered as UI fields. See `docs/model-setup.md`. Prior live smoke-test results are in `docs/live-validation.md`; the new PDF check is in `docs/pdf-validation.md`. Neither establishes general accuracy.
 
 Copy `.env.example` to `.env` only if no local `.env` exists. Set the endpoint, model and key there. Use a Chat Completions-compatible provider with JSON Schema support; set `LLM_STRUCTURED=false` for JSON mode only. Model compatibility varies, including support for `temperature=0`.
 
-Generating a plan with Sample mode off sends the instruction, filenames, table column names and row counts to the locally configured provider. The UI explains this beside the generation button. Uploaded document contents stay local. No web search or arbitrary generated-code execution is available. Keys are not logged, written or displayed by the UI.
+Generating a plan sends the instruction, filenames, table column names and row counts to the locally configured provider. The UI explains this beside the generation button. Uploaded document contents stay local. No web search or arbitrary generated-code execution is available. Keys are not logged, written or displayed by the UI.
 
-Model calls use your provider plan. No live API requests were made during the latest UI/local-feature changes. The latest offline checks also exclude the mock HTTP test, making no HTTP requests at all.
+Model calls use your provider plan. The owner explicitly authorized the latest PDF integration run; it used the configured Groq model to generate a new workflow. Backend regression tests remain separate and do not invoke a live model.
 
 ## Supported operations
 
@@ -68,7 +67,7 @@ Model calls use your provider plan. No live API requests were made during the la
 | `select` / `sort` | Choose columns or order rows |
 | `export` | Produce a formula-escaped Excel or CSV report |
 
-Invoice extraction recognizes explicit `Vendor:` or `Supplier:`, `Total:` / `Grand Total:` / `Invoice Total:`, and INR/USD/EUR markers. It is a conservative labeled-field parser, not general invoice intelligence. Missing/ambiguous fields are marked `needs_review`. Invoice threshold comparisons require INR. Currency conversion, scanned PDFs, multi-invoice documents, and unconstrained extraction are not implemented.
+Invoice extraction recognizes explicit `Vendor:` or `Supplier:`, `Total:` / `Grand Total:` / `Invoice Total:` / `Amount due:`, and INR/USD/EUR markers. It is a conservative labeled-field parser, not general invoice intelligence. Conflicting totals or missing fields are marked `needs_review`. Invoice threshold comparisons require INR. Currency conversion, scanned PDFs, multi-invoice documents, and unconstrained extraction are not implemented.
 
 ## Validation and output checks
 

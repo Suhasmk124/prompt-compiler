@@ -1,47 +1,30 @@
 # Manual UI acceptance
 
-Browser verification belongs to the project owner. The coding agent has not performed these UI checks.
+Browser testing belongs to the project owner. The coding agent has not performed these checks.
 
-## Startup and privacy
+## Guided stages
 
-1. Stop the old server and launch `.\.venv\Scripts\python.exe run_app.py`.
-2. Verify there is no preset_picker default/session-state warning.
-3. Verify no key, endpoint, provider or model entry field appears on any page.
-4. Turn Sample mode off to check configuration status, but do not generate a live plan unless a model call is intended.
-5. Refresh/reconnect normally and check for the reported Proactor shutdown error. Report any remaining traceback.
+1. Launch `.\.venv\Scripts\python.exe run_app.py` with the existing local .env.
+2. Initially see only the task/files stage and slim progress indicator. There should be no plan/report placeholder boxes or offline-mode toggle.
+3. Select Try example PDF, preview/download it, and enter a task. Generation must remain disabled if the engine is not configured.
+4. Generate a plan deliberately; this makes model calls. The task/files view should be replaced by Review after success.
+5. Review shows compact steps, local rule editing and advanced JSON, with no report box yet.
+6. Run the workflow. Success should advance to Report, replacing Review. Failure should remain on Review with a useful error and trace.
+7. Adjust plan should return to Review without a model call. Edit task & files should return to the first stage, preserving the draft and inputs.
+8. An unchanged request can continue to the existing plan without regenerating. Changed task/files invalidate the old plan and output.
+9. Check stage transitions, staggered step entrance, floating decorative tiles and reduced-motion behavior. Verify these animations do not imply fake execution progress.
+10. Verify no key, model, endpoint or provider entry fields appear anywhere.
 
-## Files and sample tasks
+## Reuse and reports
 
-1. Verify the drop zone, Try sample invoices and Clear files controls.
-2. Check compact file chips and local previews; no long vertical source list should appear.
-3. Upload CSV/XLSX files. They should replace samples; preview shows the first 100 rows.
-4. Clear files: generation disables. Restore samples and generate Invoice review in Sample mode.
-5. Compact workflow steps should have no descriptive paragraphs or FROM lines. Run the plan.
-6. Verify four rows and flags false, true, false, true; exactly 50,000 is not flagged.
-7. Test High-value invoices (50,001 and 75,000) and Vendor summary (100,001 and 87,500).
+1. Save plan JSON and import it with new compatible file bindings. Loading and execution should work without model calls.
+2. Adjust a flag threshold/comparison or output filename and apply. The previous report must invalidate; rerun locally to get a new report.
+3. Compare two successful runs, including a changed threshold and different schemas. Changed row versions count as additions/removals; schema differences should block row comparison.
+4. Search the report, download matching rows, and verify original reports remain unfiltered.
+5. Download everything as ZIP and verify it includes the executed workflow, audit and reports.
+6. Try invalid JSON, missing file bindings, incompatible schemas and an unsafe export name. Execution should be blocked.
+7. Visit Run history and Research, then return. The current stage, plan edits and report should persist.
+8. New workflow should return to the first stage and clear current task/files/output while retaining bounded comparison snapshots and run history.
+9. Refresh/reconnect and check startup warnings/Windows connection cleanup. Report any remaining traceback.
 
-## Local features
-
-1. Search the report for Acme, then an absent value. Check match counts and empty results.
-2. Download matching rows as CSV; original report downloads must stay unfiltered.
-3. Download everything as ZIP; verify workflow.json, audit.json and reports/ contents.
-4. Save workflow JSON. Start a new workflow, restore samples, then load that JSON and run without model calls.
-5. Import an invalid plan or one referencing missing files. Expect validation errors.
-6. Edit gt to gte in the plan and run. The 50,000 row should be flagged.
-7. Verify workflow.json in the ZIP matches the edited plan that actually executed.
-8. Visit Run history and Research, then return. Current task, files, edits and result should persist.
-9. New workflow clears current files, task and output while retaining session history.
-10. Check narrow-window layout, readable contrast, compact cards, focus visibility and the decorative header.
-
-## Reuse and comparison
-
-1. Save the Invoice review plan. Upload a new compatible invoice with a different filename.
-2. Import the saved JSON, bind its read step to the new filename and load. No model call should occur.
-3. Try an empty binding or incompatible CSV schema and verify validation blocks loading.
-4. Restore samples and generate/run Invoice review. Open Adjust rules & output names and change gt to gte at 50,000.
-5. Apply changes: the old report should disappear. Run again; the 50,000 flag should now be true.
-6. Compare with the earlier run. Expect three unchanged rows, one addition and one removal.
-7. Rename the output to revised.csv and rerun. Check the CSV download and bundled workflow match the updated plan.
-8. Try an output filename containing ../ and verify rejection without changing the previous valid plan.
-9. Run a different report schema, then compare. Expect a column-change message rather than a misleading row comparison.
-10. Verify only step names and small status dots remain on workflow cards; no repeated Ready labels or descriptive paragraphs.
+The backend PDF smoke check is documented separately in docs/pdf-validation.md. It does not replace visual acceptance.

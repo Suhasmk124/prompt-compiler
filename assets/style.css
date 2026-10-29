@@ -102,3 +102,20 @@ p {line-height:1.6;}
 @media(prefers-reduced-motion:reduce) {*{transition:none!important;animation:none!important}}
 .node-state {width:7px;height:7px;display:inline-block;flex-shrink:0;background:#d2cbe0;border-radius:50%;margin:5px 3px 0 12px;}
 .node-state.success {background:#74b898;}.node-state.failed {background:#e28a70;}
+@keyframes stageReveal {from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes nodeReveal {from{opacity:0;transform:translateX(-9px)}to{opacity:1;transform:translateX(0)}}
+@keyframes studioFloat {0%,100%{translate:0 0}50%{translate:0 -7px}}
+@keyframes orbitTurn {from{transform:rotate(-23deg)}to{transform:rotate(337deg)}}
+@keyframes readyPulse {0%,100%{box-shadow:0 0 0 0 #74b89815}50%{box-shadow:0 0 0 5px #74b89800}}
+[class*="st-key-stage_"] {animation:stageReveal .32s ease-out both;}
+.flow-node {animation:nodeReveal .3s ease-out both;animation-delay:calc(var(--step-index,1) * 55ms);}
+.art-tile {animation:studioFloat 4.5s ease-in-out infinite;}.art-tile.mint{animation-delay:-1.5s}.art-tile.peach{animation-delay:-3s}
+.orbit.one {animation:orbitTurn 35s linear infinite;}
+.connection-tag.live::before {animation:readyPulse 3s ease-in-out infinite;}
+.report-icon {animation:stageReveal .5s cubic-bezier(.2,.8,.2,1) both;}
+.journey-step {transition:color .25s ease;}.journey-step span{transition:background .25s ease,box-shadow .25s ease;}
+.journey-step.active span {box-shadow:0 0 0 4px #ece5ff80;}
+.st-key-stage_plan,.st-key-stage_result {max-width:1000px;margin:0 auto;}
+[data-testid="stDownloadButton"] button{transition:transform .15s ease,box-shadow .15s ease;}
+[data-testid="stDownloadButton"] button:hover{transform:translateY(-1px);box-shadow:0 5px 12px #7864cb17;}
+@media(prefers-reduced-motion:reduce) {*{transition:none!important;animation:none!important}}

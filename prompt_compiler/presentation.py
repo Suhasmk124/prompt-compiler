@@ -41,7 +41,7 @@ def plan_markup(workflow, trace=()):
     for index, step in enumerate(workflow.steps, 1):
         status = statuses.get(step.id, 'ready')
         badge = {'success': 'Complete', 'failed': 'Needs attention', 'ready': 'Ready'}[status]
-        cards.append(f'''<div class="flow-node {status}">
+        cards.append(f'''<div class="flow-node {status}" style="--step-index:{index}">
           <div class="node-index">{index:02d}</div>
           <div class="node-copy"><div class="node-heading">{escape(OP_NAMES[step.operation])}<span class="node-state {status}" title="{badge}" aria-label="{badge}"></span></div>
           </div></div>''')

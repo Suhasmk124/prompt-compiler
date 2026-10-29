@@ -24,7 +24,7 @@ class Run:
 def extract_invoice(row):
     text = str(row['text'])
     vendor = re.search(r'(?im)^\s*(?:vendor|supplier)\s*:\s*(.+)$', text)
-    totals = re.findall(r'(?im)^\s*(?:grand total|invoice total|total)\s*:\s*(?:INR|Rs\.?|₹|USD|EUR|\$|€)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*(?:INR|USD|EUR)?\s*$', text)
+    totals = re.findall(r'(?im)^\s*(?:grand total|invoice total|amount due|total)\s*:\s*(?:INR|Rs\.?|₹|USD|EUR|\$|€)?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*(?:INR|USD|EUR)?\s*$', text)
     currencies = set(re.findall(r'\b(?:INR|USD|EUR)\b', text.upper()))
     for symbol, currency in [('₹', 'INR'), ('$', 'USD'), ('€', 'EUR')]:
         if symbol in text:

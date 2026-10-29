@@ -9,7 +9,7 @@ It is a hosted open-weight model with a free API plan and strict structured-outp
 1. Create an API key in your own Groq account: https://console.groq.com/keys
 2. If no `.env` exists, copy `.env.example` to `.env` locally. Configure `LLM_BASE_URL`, `LLM_MODEL` and `LLM_API_KEY` there.
 3. For Groq use `https://api.groq.com/openai/v1`, `openai/gpt-oss-20b` and `LLM_STRUCTURED=true`.
-4. Restart with `.\.venv\Scripts\python.exe run_app.py` and turn Sample mode off. The app shows configuration status, not credentials or setup fields.
+4. Restart with `.\.venv\Scripts\python.exe run_app.py`. New plan generation always uses your configured model. The app shows configuration status, not credentials or setup fields; no offline-mode toggle exists.
 5. Use **Planning preferences → Plan + self-correction**, the live-tested default. Standard uses fewer requests but reliability can differ.
 
 Never commit the real `.env` or paste keys into workflow instructions. Credentials are never rendered as browser widgets. No account, key, billing plan or paid upgrade is created automatically.

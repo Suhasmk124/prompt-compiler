@@ -4,18 +4,17 @@ from dataclasses import asdict
 from datetime import datetime
 import hashlib
 from html import escape
-from io import BytesIO
 import json
 import os
 from pathlib import Path
-import zipfile
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 import streamlit as st
 
 from prompt_compiler.compiler import Compilation, compile_workflow
-from prompt_compiler.demo import DEMOS, sample_files
+from prompt_compiler.demo import DEMOS
+from prompt_compiler.journey import resolve_stage
 from prompt_compiler.executor import execute, export_table
 from prompt_compiler.files import inventory, read_file
 from prompt_compiler.presentation import COMPARISONS, plan_markup, progress_markup
@@ -50,6 +49,11 @@ PLAN_STATE = ['compilation', 'run', 'workflow_editor', 'workflow_draft', 'valida
 def clear_plan():
     for name in PLAN_STATE:
         st.session_state.pop(name, None)
+    st.session_state['flow_stage'] = 'describe'
+
+
+def go_to_stage(stage):
+    st.session_state['flow_stage'] = stage
 
 
 def new_workspace():
@@ -60,21 +64,22 @@ def new_workspace():
     st.session_state['preset_picker'] = 'Write your own task'
     st.session_state['saved_preset'] = 'Write your own task'
     st.session_state['active_files'] = {}
-    st.session_state['sample_pack'] = False
+    st.session_state['example_pack'] = False
     st.session_state['duplicate_uploads'] = False
     st.session_state['upload_epoch'] = st.session_state.get('upload_epoch', 0) + 1
 
 
-def use_sample_pack():
-    st.session_state['active_files'] = sample_files()
-    st.session_state['sample_pack'] = True
+def use_example_pdf():
+    path = ROOT / 'examples/pdf/cedar_coast_invoice.pdf'
+    st.session_state['active_files'] = {path.name: path.read_bytes()}
+    st.session_state['example_pack'] = True
     st.session_state['duplicate_uploads'] = False
     st.session_state['upload_epoch'] = st.session_state.get('upload_epoch', 0) + 1
 
 
 def clear_files():
     st.session_state['active_files'] = {}
-    st.session_state['sample_pack'] = False
+    st.session_state['example_pack'] = False
     st.session_state['duplicate_uploads'] = False
     st.session_state['upload_epoch'] = st.session_state.get('upload_epoch', 0) + 1
 
@@ -83,7 +88,7 @@ def save_uploads(widget_key):
     uploads = st.session_state.get(widget_key) or []
     st.session_state['active_files'] = {f.name: f.getvalue() for f in uploads}
     st.session_state['duplicate_uploads'] = len(st.session_state['active_files']) != len(uploads)
-    st.session_state['sample_pack'] = False
+    st.session_state['example_pack'] = False
 
 
 def save_instruction():
@@ -114,17 +119,14 @@ def sidebar():
         st.session_state.setdefault('navigation', 'Workspace')
         page = st.radio('Navigation', ['Workspace', 'Run history', 'Research'], index=None, key='navigation', label_visibility='collapsed')
         st.divider()
-        sample_mode = st.toggle('Sample mode', value=True, help='Try the three built-in tasks without any model requests.')
         base = os.getenv('LLM_BASE_URL', '').strip()
         model = os.getenv('LLM_MODEL', '').strip()
         key = os.getenv('LLM_API_KEY', '').strip()
-        settings = {'mode': 'Sample workspace' if sample_mode else 'Connected model', 'strategy': 'feedback', 'retries': 2,
+        settings = {'mode': 'Connected model', 'strategy': 'feedback', 'retries': 2,
                     'base_url': base, 'model': model, 'key': key, 'structured': os.getenv('LLM_STRUCTURED', 'true').lower() != 'false'}
         configured = bool(base and model and (key or base.startswith(('http://localhost:', 'http://127.0.0.1:'))))
         settings['configured'] = configured
-        if sample_mode:
-            st.caption('Three ready-to-run examples. No model calls.')
-        elif configured:
+        if configured:
             st.caption('Task engine configured locally.')
         else:
             st.warning('Set up the task engine in the local .env file, then restart.')
@@ -137,9 +139,8 @@ def sidebar():
 
 
 def header(page, settings):
-    sample = settings['mode'] == 'Sample workspace'
-    status = 'Sample mode' if sample else 'Engine ready' if settings['configured'] else 'Setup needed'
-    markup(f'<div class="topline"><span>Studio <span style="color:#b7bfcb;margin:0 9px">/</span><b>{escape(page)}</b></span><span class="connection-tag {"live" if not sample and settings["configured"] else ""}">{status}</span></div>')
+    status = 'Engine ready' if settings['configured'] else 'Setup needed'
+    markup(f'<div class="topline"><span>Studio <span style="color:#b7bfcb;margin:0 9px">/</span><b>{escape(page)}</b></span><span class="connection-tag {"live" if settings["configured"] else ""}">{status}</span></div>')
 
 
 def audit_payload(compilation, run):
@@ -264,14 +265,13 @@ def results_panel(compilation, run):
 
 def inputs_panel():
     section('DROP IT IN', 'Source files')
-    st.session_state.setdefault('active_files', sample_files())
-    st.session_state.setdefault('sample_pack', True)
+    st.session_state.setdefault('active_files', {})
     epoch = st.session_state.get('upload_epoch', 0)
     widget_key = f'upload_widget_{epoch}'
     st.file_uploader('Drop documents or spreadsheets here', type=['txt', 'pdf', 'csv', 'xlsx'],
                      accept_multiple_files=True, key=widget_key, on_change=save_uploads, args=(widget_key,))
     first, second = st.columns([1.5, 1])
-    first.button('Try sample invoices', on_click=use_sample_pack, width='stretch')
+    first.button('Try example PDF', on_click=use_example_pdf, width='stretch', disabled=not (ROOT / 'examples/pdf/cedar_coast_invoice.pdf').exists())
     second.button('Clear files', on_click=clear_files, width='stretch', disabled=not st.session_state['active_files'])
     files = st.session_state['active_files']
     manifest, error = {}, None
@@ -284,7 +284,7 @@ def inputs_panel():
         error = str(exc)
         st.error(error)
     if manifest:
-        label = 'Sample pack' if st.session_state.get('sample_pack') else 'Your uploads'
+        label = 'Example PDF' if st.session_state.get('example_pack') else 'Your uploads'
         total_kb = sum(len(content) for content in files.values()) / 1024
         markup(f'<div class="input-summary"><span class="input-dot"></span><b>{label}</b><span>{len(files)} files · {total_kb:.1f} KB</span></div>')
         chips = ''.join(f'<span class="file-chip">{escape(name)}</span>' for name in list(manifest)[:3])
@@ -300,57 +300,52 @@ def inputs_panel():
             else:
                 st.dataframe(frame.head(100), hide_index=True, width='stretch')
                 st.caption(f'{len(frame):,} rows · first 100 shown')
-        if st.session_state.get('sample_pack'):
-            with st.expander('Download sample pack'):
-                buffer = BytesIO()
-                with zipfile.ZipFile(buffer, 'w') as archive:
-                    for name, content in files.items():
-                        archive.writestr(name, content)
-                st.download_button('Get sample files', buffer.getvalue(), 'sample_invoices.zip')
+        if st.session_state.get('example_pack'):
+            name = next(iter(files))
+            st.download_button('Download example PDF', files[name], name, mime='application/pdf')
     st.caption('TXT, PDF, CSV, XLSX · 10 MB per file · text-based PDFs')
     return files, manifest, error
 
 
-def workspace(settings):
-    markup('<div class="studio-hero"><div><span class="hero-kicker">LESS BUSYWORK. MORE POSSIBILITY.</span><h1>What are we making today?</h1><p>Your task, a clear plan, and something worth downloading.</p></div><div class="hero-art" aria-hidden="true"><i class="orbit one"></i><i class="orbit two"></i><span class="art-tile violet">✦</span><span class="art-tile mint">↗</span><span class="art-tile peach">✓</span></div></div>')
+def install_plan(result):
+    st.session_state['compilation'] = result
+    st.session_state['workflow_editor'] = result.workflow.model_dump_json(indent=2)
+    st.session_state['workflow_draft'] = st.session_state['workflow_editor']
+    st.session_state['flow_stage'] = 'plan'
+
+
+def describe_stage(settings, manifest, file_error):
+    markup('<div class="studio-hero"><div><span class="hero-kicker">LESS BUSYWORK. MORE POSSIBILITY.</span><h1>What are we making today?</h1><p>Start with a task and the files it needs.</p></div><div class="hero-art" aria-hidden="true"><i class="orbit one"></i><i class="orbit two"></i><span class="art-tile violet">✦</span><span class="art-tile mint">↗</span><span class="art-tile peach">✓</span></div></div>')
     request_col, files_col = st.columns([1.8, 1], gap='large')
     with files_col:
         with st.container(border=True, key='panel_files'):
-            files, manifest, file_error = inputs_panel()
+            inputs_panel()
     with request_col:
         with st.container(border=True, key='panel_request'):
-            section('START WITH AN IDEA', 'Tell us what needs doing')
+            section('01 · YOUR TASK', 'Tell us what needs doing')
             choices = ['Write your own task', *DEMOS]
             st.session_state.setdefault('preset_picker', st.session_state.get('saved_preset', 'Invoice review'))
-            # Session state supplies the initial value; index=None avoids competing defaults.
             st.selectbox('Quick start', choices, index=None, key='preset_picker', on_change=pick_preset)
-            st.session_state.setdefault('instruction_draft', DEMOS['Invoice review'])
             st.session_state.setdefault('task_instruction', st.session_state['instruction_draft'])
             instruction = st.text_area('Your instruction', key='task_instruction', height=155, label_visibility='collapsed',
-                on_change=save_instruction, placeholder='Read these invoices, flag totals above INR 50,000, and create an Excel report…')
-            sample_mode = settings['mode'] == 'Sample workspace'
-            st.caption('Sample mode: choose one of the three quick starts.' if sample_mode else 'New plans send your instruction and file names/columns to the configured model. File contents stay local.')
-            fingerprint = hashlib.sha256(json.dumps({'instruction': instruction,
-                'files': {n: hashlib.sha256(b).hexdigest() for n, b in files.items()},
-                **{k: v for k, v in settings.items() if k != 'key'}}, sort_keys=True).encode()).hexdigest()
-            if st.session_state.get('fingerprint') != fingerprint:
-                clear_plan()
-                st.session_state['fingerprint'] = fingerprint
-            ready = bool(manifest) and not file_error and bool(instruction.strip()) and (sample_mode or settings['configured'])
+                on_change=save_instruction, placeholder='Read this PDF, flag totals above INR 70,000, and create an Excel report…')
+            st.caption('Generating a plan sends your instruction and file names/columns to the configured model. File contents stay local.')
+            ready = bool(manifest) and not file_error and bool(instruction.strip()) and settings['configured']
             if st.button('✦ Generate plan', type='primary', width='stretch', disabled=not ready):
                 clear_plan()
                 try:
-                    provider = None if sample_mode else Provider(settings['base_url'], settings['model'], settings['key'], settings['structured'])
-                    with st.spinner('Putting your plan together…'):
+                    provider = Provider(settings['base_url'], settings['model'], settings['key'], settings['structured'])
+                    with st.spinner('Building and validating your plan…'):
                         result = compile_workflow(instruction, manifest, provider, settings['strategy'], settings['retries'])
                     st.session_state['compilation'] = result
                     if result.workflow:
-                        st.session_state['workflow_editor'] = result.workflow.model_dump_json(indent=2)
-                        st.session_state['workflow_draft'] = st.session_state['workflow_editor']
-                    else:
-                        st.error(result.error)
+                        install_plan(result)
+                        st.rerun()
                 except Exception as exc:
                     st.error(str(exc))
+            result = st.session_state.get('compilation')
+            if result and result.error:
+                st.error(result.error)
             with st.expander('Have a saved workflow?'):
                 imported = st.file_uploader('Load workflow JSON', type=['json'], key='import_json')
                 saved, bindings = None, {}
@@ -368,72 +363,116 @@ def workspace(settings):
                     try:
                         saved = remap_inputs(saved, bindings, manifest)
                         clear_plan()
-                        st.session_state['compilation'] = Compilation(workflow=saved, mode='imported')
-                        st.session_state['workflow_editor'] = saved.model_dump_json(indent=2)
-                        st.session_state['workflow_draft'] = st.session_state['workflow_editor']
+                        install_plan(Compilation(workflow=saved, mode='imported'))
+                        st.rerun()
                     except Exception as exc:
                         st.error(str(exc))
+            if result and result.workflow:
+                st.button('Continue with current plan →', on_click=go_to_stage, args=('plan',))
 
+
+def record_execution(current, run, files, editor):
+    st.session_state['run'] = run
+    st.session_state['validated_editor'] = editor
+    st.session_state['executed_workflow'] = current.model_dump()
+    original = st.session_state['compilation'].workflow
+    st.session_state['manual_edits'] = int(editor != original.model_dump_json(indent=2))
+    timestamp = datetime.now(ZoneInfo('Asia/Kolkata')).strftime('%H:%M:%S IST')
+    input_fingerprint = hashlib.sha256(json.dumps({n: hashlib.sha256(b).hexdigest() for n, b in files.items()}, sort_keys=True).encode()).hexdigest()
+    st.session_state['current_input_fingerprint'] = input_fingerprint
+    snapshots, snapshot = retain_snapshot(st.session_state.get('snapshots', []), current, run, timestamp, input_fingerprint)
+    st.session_state['snapshots'] = snapshots
+    st.session_state['active_run_id'] = snapshot.id if snapshot else None
+    st.session_state['snapshot_notice'] = run.error is None and snapshot is None
+    history = st.session_state.setdefault('run_history', [])
+    history.insert(0, {'Workflow': current.title, 'Status': 'Needs attention' if run.error else 'Completed',
+        'Time': timestamp, 'Files created': len(run.artifacts), 'Steps completed': sum(t['status'] == 'success' for t in run.trace)})
+    del history[20:]
+    st.session_state.pop('report_search', None)
+
+
+def plan_stage(files, manifest, file_error):
+    st.button('← Edit task & files', on_click=go_to_stage, args=('describe',))
+    compilation = st.session_state['compilation']
+    with st.container(border=True, key='panel_plan'):
+        section('02 · REVIEW', compilation.workflow.title)
+        st.session_state.setdefault('workflow_editor', st.session_state.get('workflow_draft', compilation.workflow.model_dump_json(indent=2)))
+        rule_controls(manifest)
+        with st.expander('Edit or save plan'):
+            editor = st.text_area('Workflow JSON', key='workflow_editor', height=360, on_change=save_workflow)
+            st.download_button('Save plan · JSON', editor, 'workflow.json', mime='application/json')
+        current = None
+        try:
+            current = Workflow.model_validate_json(editor)
+            validate_workflow(current, manifest)
+        except ValueError as exc:
+            st.error(str(exc))
+        if file_error:
+            st.error(file_error)
+        if st.session_state.get('validated_editor') != editor:
+            st.session_state.pop('run', None)
+        run = st.session_state.get('run')
+        markup(plan_markup(current or compilation.workflow, run.trace if run else ()))
+        if st.button('Run workflow →', type='primary', width='stretch', disabled=current is None or bool(file_error)):
+            try:
+                with st.spinner('Running your plan…'):
+                    run = execute(current, files)
+                record_execution(current, run, files, editor)
+                if run.error is None:
+                    st.session_state['flow_stage'] = 'result'
+                    st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+        run = st.session_state.get('run')
+        if run and run.error:
+            st.error('Execution stopped: ' + run.error)
+        elif run:
+            st.button('View current report →', on_click=go_to_stage, args=('result',))
+        with st.expander('Technical details'):
+            st.caption('Imported workflow' if compilation.mode == 'imported' else f'{compilation.seconds:.2f}s · {len(compilation.attempts)} attempts · {compilation.prompt_tokens + compilation.completion_tokens:,} reported tokens')
+            if compilation.decomposition:
+                st.text(compilation.decomposition)
+            st.json(compilation.attempts)
+            if run:
+                st.dataframe(run.trace, hide_index=True, width='stretch')
+
+
+def workspace(settings):
+    # Migrate old sessions away from preloaded preset inputs without making a request.
+    if st.session_state.get('guided_flow_version') != 1:
+        clear_plan()
+        st.session_state['active_files'] = {}
+        st.session_state['guided_flow_version'] = 1
+    files = st.session_state.setdefault('active_files', {})
+    st.session_state.setdefault('instruction_draft', DEMOS['Invoice review'])
+    manifest, file_error = {}, None
+    try:
+        if st.session_state.get('duplicate_uploads'):
+            raise ValueError('Uploaded filenames must be unique.')
+        if files:
+            manifest = inventory(files)
+    except Exception as exc:
+        file_error = str(exc)
+    fingerprint = hashlib.sha256(json.dumps({'instruction': st.session_state['instruction_draft'],
+        'files': {n: hashlib.sha256(b).hexdigest() for n, b in files.items()},
+        **{k: v for k, v in settings.items() if k != 'key'}}, sort_keys=True).encode()).hexdigest()
+    if st.session_state.get('fingerprint') != fingerprint:
+        clear_plan()
+        st.session_state['fingerprint'] = fingerprint
     compilation = st.session_state.get('compilation')
     run = st.session_state.get('run')
-    journey = st.empty()
-    plan_col, output_col = st.columns([1, 1.35], gap='large')
-    with plan_col:
-        with st.container(border=True, key='panel_plan'):
-            section('THE PLAN', compilation.workflow.title if compilation and compilation.workflow else 'Ready, set, workflow')
-            current, editor = None, None
-            if compilation and compilation.workflow:
-                st.session_state.setdefault('workflow_editor', st.session_state.get('workflow_draft', compilation.workflow.model_dump_json(indent=2)))
-                rule_controls(manifest)
-                with st.expander('Edit or save plan'):
-                    editor = st.text_area('Workflow JSON', key='workflow_editor', height=360, on_change=save_workflow)
-                    st.download_button('Save plan · JSON', editor, 'workflow.json', mime='application/json')
-                try:
-                    current = Workflow.model_validate_json(editor)
-                    validate_workflow(current, manifest)
-                except Exception as exc:
-                    current = None
-                    st.error(str(exc))
-                if st.session_state.get('validated_editor') != editor:
-                    st.session_state.pop('run', None)
-                    run = None
-                if st.button('Run workflow  →', type='primary', width='stretch', disabled=current is None or bool(file_error)):
-                    try:
-                        with st.spinner('Making it happen…'):
-                            run = execute(current, files)
-                        st.session_state['run'] = run
-                        st.session_state['validated_editor'] = editor
-                        st.session_state['executed_workflow'] = current.model_dump()
-                        st.session_state['manual_edits'] = int(editor != compilation.workflow.model_dump_json(indent=2))
-                        timestamp = datetime.now(ZoneInfo('Asia/Kolkata')).strftime('%H:%M:%S IST')
-                        input_fingerprint = hashlib.sha256(json.dumps({n: hashlib.sha256(b).hexdigest() for n, b in files.items()}, sort_keys=True).encode()).hexdigest()
-                        st.session_state['current_input_fingerprint'] = input_fingerprint
-                        snapshots, snapshot = retain_snapshot(st.session_state.get('snapshots', []), current, run, timestamp, input_fingerprint)
-                        st.session_state['snapshots'] = snapshots
-                        st.session_state['active_run_id'] = snapshot.id if snapshot else None
-                        st.session_state['snapshot_notice'] = run.error is None and snapshot is None
-                        history = st.session_state.setdefault('run_history', [])
-                        history.insert(0, {'Workflow': current.title, 'Status': 'Needs attention' if run.error else 'Completed',
-                            'Time': timestamp, 'Files created': len(run.artifacts),
-                            'Steps completed': sum(t['status'] == 'success' for t in run.trace)})
-                        del history[20:]
-                        st.session_state.pop('report_search', None)
-                    except Exception as exc:
-                        st.error(str(exc))
-                markup(plan_markup(current or compilation.workflow, run.trace if run else ()))
-                with st.expander('Technical details'):
-                    st.caption('Imported workflow' if compilation.mode == 'imported' else f'{compilation.seconds:.2f}s · {len(compilation.attempts)} attempts · {compilation.prompt_tokens + compilation.completion_tokens:,} reported tokens')
-                    if compilation.decomposition:
-                        st.text(compilation.decomposition)
-                    st.json(compilation.attempts)
-            else:
-                empty_state('A plan for your next big little task', 'Start with your files and an instruction.', '⌘')
-                if compilation and compilation.error:
-                    st.error(compilation.error)
-    with output_col:
-        with st.container(border=True, key='panel_output'):
-            results_panel(compilation, run)
-    journey.markdown(progress_markup(bool(compilation and compilation.workflow), bool(run and not run.error)), unsafe_allow_html=True)
+    stage = resolve_stage(st.session_state.get('flow_stage', 'describe'), bool(compilation and compilation.workflow), bool(run and not run.error))
+    st.session_state['flow_stage'] = stage
+    markup(progress_markup(compiled=stage != 'describe', finished=stage == 'result'))
+    with st.container(key='stage_' + stage):
+        if stage == 'describe':
+            describe_stage(settings, manifest, file_error)
+        elif stage == 'plan':
+            plan_stage(files, manifest, file_error)
+        else:
+            st.button('← Adjust plan', on_click=go_to_stage, args=('plan',))
+            with st.container(border=True, key='panel_output'):
+                results_panel(compilation, run)
     markup('<div class="workspace-footer"><span>✦ Prompt Compiler</span><span>Made for a little less manual work.</span></div>')
 
 
@@ -447,9 +486,9 @@ def research():
             {'Approach': 'Plan + self-correction', 'Method': 'Decomposition, generation, validation feedback', 'Initial calls': 2},
         ], hide_index=True, width='stretch')
         st.write('Measure schema validity, workflow correctness, execution success, output correctness, retries, human edits, latency and token usage.')
-        st.caption('Use identical held-out tasks and model settings. Offline presets are development checks, not model performance evidence.')
+        st.caption('Use identical held-out tasks and model settings. Local executor checks are separate from model performance evidence.')
     with st.expander('Run benchmarks from your terminal'):
-        st.code('.\\.venv\\Scripts\\python.exe -m prompt_compiler.benchmark --offline\n.\\.venv\\Scripts\\python.exe -m prompt_compiler.benchmark --live', language='powershell')
+        st.code('.\\.venv\\Scripts\\python.exe -m pytest -q\n.\\.venv\\Scripts\\python.exe -m prompt_compiler.benchmark --live', language='powershell')
         st.caption('Live mode reads the server-side .env and makes provider calls only when you explicitly run that command.')
 
 

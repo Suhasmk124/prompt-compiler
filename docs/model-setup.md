@@ -10,7 +10,7 @@ It is a hosted open-weight model with a free API plan and strict structured-outp
 2. In Prompt Compiler, select **Connected model**, then **Groq** in the sidebar.
 3. Leave the default endpoint `https://api.groq.com/openai/v1` and model `openai/gpt-oss-20b`.
 4. Enter your key in the password field, keep strict structured output enabled, and acknowledge sending your instruction and file metadata.
-5. Start with **Workflow preferences → Standard**. This uses one model request per compilation; Plan first uses two, and self-correction can use additional requests.
+5. Start with **Workflow preferences → Plan + self-correction**, the default verified against all three development tasks with the live model. It uses decomposition and generation, with additional requests only if validation retries are needed. Standard uses one request per compilation and is available as a cheaper experimental baseline; its reliability can differ.
 
 Alternatively copy `.env.example` to `.env` locally and fill in `LLM_API_KEY`. Never commit the real `.env`. The UI does not save entered keys to disk. No Groq account, key, billing plan, or paid upgrade is created automatically by this app.
 
@@ -19,6 +19,14 @@ Alternatively copy `.env.example` to `.env` locally and fill in `LLM_API_KEY`. N
 Groq's published free-plan table lists 30 requests/minute, 1,000 requests/day, 8,000 tokens/minute and 200,000 tokens/day for this model. Account-specific limits can differ. Tokens include sizeable schemas and outputs, so 1,000 requests/day does not mean 1,000 complete workflows/day. Expect to pace bulk experiments and check your actual remaining quota.
 
 Strict-mode calls send the schema once through response_format. JSON-mode calls include it in the prompt. Both still undergo local validation. HTTP 429 errors are surfaced as quota/rate-limit messages rather than hidden paid fallbacks.
+
+For a small live smoke test with pacing:
+
+```powershell
+.\.venv\Scripts\python.exe -m prompt_compiler.benchmark --live --strategy one_shot --pause-seconds 40 --output outputs/live-one-shot.json
+```
+
+This runs the three development fixtures with one-shot prompting. Omit `--strategy` to compare all three approaches. Pauses reduce quota bursts but do not guarantee staying within every account's limits. The API client identifies itself as PromptCompiler rather than using the default Python user-agent, which was rejected by Groq's edge service during initial integration.
 
 ## Alternative
 

@@ -221,6 +221,7 @@ def test_real_http_adapter_against_local_stub():
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
             requests.append(json.loads(self.rfile.read(int(self.headers['Content-Length']))))
+            requests[-1]['test_user_agent'] = self.headers.get('User-Agent', '')
             response = json.dumps({'choices': [{'message': {'content': '{"ok":true}'}}],
                                    'usage': {'prompt_tokens': 12, 'completion_tokens': 4}}).encode()
             self.send_response(200)
@@ -237,6 +238,7 @@ def test_real_http_adapter_against_local_stub():
         reply = provider.complete([{'role': 'user', 'content': 'test'}], {'type': 'object'})
         assert reply.prompt_tokens == 12 and reply.completion_tokens == 4
         assert requests[0]['response_format']['json_schema']['strict']
+        assert requests[0]['test_user_agent'].startswith('PromptCompiler/')
     finally:
         server.shutdown()
         server.server_close()
@@ -275,3 +277,13 @@ def test_strict_schema_uses_closed_objects_and_enum_constants():
     assert 'title' not in schema['$defs']['Read']['properties']['id']
     assert 'title' in schema['$defs']['Workflow']['properties']
     assert 'title' in schema['$defs']['Workflow']['required']
+
+
+def test_gold_checks_accept_equivalent_column_names_and_row_order():
+    from prompt_compiler.benchmark import check_output
+    payload = invoice_plan().model_dump()
+    payload['steps'][2]['output_column'] = 'high_value'
+    workflow = Workflow.model_validate(payload)
+    run = execute(workflow, sample_files())
+    run.tables['report'] = run.tables['report'].iloc[::-1]
+    assert check_output('Invoice review', workflow, run)

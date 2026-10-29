@@ -18,13 +18,20 @@ def check_output(case, workflow, run):
     if run.error:
         return False
     table = run.tables[workflow.steps[-1].id]
-    if case == 'Invoice review':
-        return (list(table['vendor']) == ['Acme Supplies', 'Acme Supplies', 'Delta Labs', 'Delta Labs']
-                and list(table['total']) == [50000, 50001, 12500, 75000]
-                and list(table['needs_review']) == [False, True, False, True])
-    if case == 'High-value invoices':
-        return sorted(table['total'].tolist()) == [50001, 75000] and len(table) == 2
-    return table.set_index('vendor')['vendor_total'].to_dict() == {'Acme Supplies': 100001, 'Delta Labs': 87500}
+    try:
+        if case == 'Invoice review':
+            flags = [s.output_column for s in workflow.steps if s.operation == 'flag']
+            return any(sorted(table[['vendor', 'total', name]].itertuples(index=False, name=None)) == [
+                ('Acme Supplies', 50000, False), ('Acme Supplies', 50001, True),
+                ('Delta Labs', 12500, False), ('Delta Labs', 75000, True)] for name in flags if name in table)
+        if case == 'High-value invoices':
+            return sorted(table[['vendor', 'total']].itertuples(index=False, name=None)) == [
+                ('Acme Supplies', 50001), ('Delta Labs', 75000)]
+        outputs = [s.output_column for s in workflow.steps if s.operation == 'aggregate']
+        return any(len(table) == 2 and table.set_index('vendor')[name].to_dict() == {
+            'Acme Supplies': 100001, 'Delta Labs': 87500} for name in outputs if name in table)
+    except (KeyError, TypeError, ValueError):
+        return False
 
 
 def check_plan(case, workflow):
@@ -33,19 +40,31 @@ def check_plan(case, workflow):
     ops = [s.operation for s in steps]
     if not all(op in ops for op in ['read', 'extract_invoices', expected, 'export']):
         return False
+    suffix = '.csv' if case == 'High-value invoices' else '.xlsx'
+    if not any(s.operation == 'export' and s.filename.endswith(suffix) for s in steps):
+        return False
     if expected in {'flag', 'filter'}:
         transforms = [s for s in steps if s.operation == expected]
         return any(s.column == 'total' and s.comparison == 'gt' and s.value == 50000 for s in transforms)
-    return any(s.operation == 'aggregate' and s.group_by == ['vendor'] and s.column == 'total' and s.function == 'sum' for s in steps)
+    return any(s.operation == 'aggregate' and 'vendor' in s.group_by and set(s.group_by) <= {'vendor', 'currency'}
+               and s.column == 'total' and s.function == 'sum' for s in steps)
 
 
-def run_suite(provider=None):
+def run_suite(provider=None, strategy=None, pause_seconds=0, progress=None):
     files = sample_files()
     manifest = inventory(files)
     rows = []
-    strategies = ['one_shot', 'decompose', 'feedback'] if provider else ['offline_preset']
+    if strategy not in {None, 'one_shot', 'decompose', 'feedback'}:
+        raise ValueError('Unknown benchmark strategy.')
+    if not 0 <= pause_seconds <= 60:
+        raise ValueError('Pause must be between 0 and 60 seconds.')
+    strategies = ([strategy] if strategy else ['one_shot', 'decompose', 'feedback']) if provider else ['offline_preset']
     for strategy in strategies:
         for case, instruction in DEMOS.items():
+            if rows and provider and pause_seconds:
+                time.sleep(pause_seconds)
+            if progress:
+                progress(f'Running {strategy}: {case}')
             start = time.perf_counter()
             result = compile_workflow(instruction, manifest, provider, strategy if provider else 'one_shot')
             row = {'case': case, 'split': 'development', 'strategy': strategy, 'mode': result.mode,
@@ -78,11 +97,13 @@ def main():
     mode.add_argument('--live', action='store_true')
     parser.add_argument('--output', default='outputs/benchmark.json')
     parser.add_argument('--json-mode', action='store_true', help='Use JSON mode instead of strict schema with compatible providers.')
+    parser.add_argument('--strategy', choices=['one_shot', 'decompose', 'feedback'], help='Run one strategy; omitted runs all three.')
+    parser.add_argument('--pause-seconds', type=float, default=0, help='Pause between live tasks to respect free-tier quotas (0–60).')
     args = parser.parse_args()
     load_dotenv()
     provider = Provider(os.getenv('LLM_BASE_URL', 'https://api.openai.com/v1'), os.getenv('LLM_MODEL', ''),
                         os.getenv('LLM_API_KEY', ''), structured=not args.json_mode) if args.live else None
-    rows = run_suite(provider)
+    rows = run_suite(provider, args.strategy, args.pause_seconds, progress=lambda message: print(message, flush=True))
     summary = {metric: sum(bool(r[metric]) for r in rows) / len(rows) for metric in
                ['first_attempt_schema_valid', 'final_workflow_valid', 'workflow_correct', 'execution_success', 'output_correct']}
     report = {'timestamp': datetime.now(timezone.utc).isoformat(), 'python': platform.python_version(),

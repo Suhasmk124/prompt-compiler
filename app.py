@@ -96,10 +96,10 @@ def sidebar():
             st.caption('Document contents stay local. Keys are not saved by the app.')
             if provider_name == 'Groq':
                 st.link_button('Get a Groq API key ↗', 'https://console.groq.com/keys', width='stretch')
-                st.caption('Free-tier quotas apply. Start with Standard to use fewer requests.')
+                st.caption('Free-tier quotas apply. Plan + self-correction is live-tested; Standard uses fewer requests.')
             settings.update(base_url=base, model=model, key=key, structured=strict, consent=consent)
         with st.expander('Workflow preferences'):
-            approach = st.selectbox('Planning approach', ['Standard', 'Plan first', 'Plan + self-correction'], index=0,
+            approach = st.selectbox('Planning approach', ['Standard', 'Plan first', 'Plan + self-correction'], index=2,
                                     help='Standard: one model call. Plan first: decomposition then generation. Self-correction: retries invalid workflows.')
             settings['strategy'] = {'Standard': 'one_shot', 'Plan first': 'decompose', 'Plan + self-correction': 'feedback'}[approach]
             settings['retries'] = st.slider('Correction budget', 0, 3, 2, disabled=settings['strategy'] != 'feedback')

@@ -30,7 +30,8 @@ class Provider:
         if schema is not None:
             body['response_format'] = ({'type': 'json_schema', 'json_schema': {'name': 'workflow', 'schema': schema, 'strict': True}}
                                        if self.structured else {'type': 'json_object'})
-        headers = {'Content-Type': 'application/json'}
+        headers = {'Content-Type': 'application/json',
+                   'User-Agent': 'PromptCompiler/0.1 (+https://github.com/Suhasmk124/prompt-compiler)'}
         if self.key:
             headers['Authorization'] = 'Bearer ' + self.key
         request = urllib.request.Request(self.url, data=json.dumps(body).encode(), headers=headers)

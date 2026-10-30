@@ -90,14 +90,14 @@ def test_action_guard_rejects_ignored_or_discarded_flag():
     payload = plan().model_dump()
     payload['steps'].pop(1)
     payload['steps'][-1]['source'] = 'read'
-    with pytest.raises(ValueError, match='no exported report'):
+    with pytest.raises(ValueError, match='omits that action|no exported report'):
         validate_requested_actions(Workflow.model_validate(payload), 'Flag matching invoices')
     validate_requested_actions(Workflow.model_validate(payload), 'Export all rows unchanged')
     payload = plan().model_dump()
     payload['steps'].insert(2, {'id': 'select', 'label': 'Select original', 'operation': 'select',
                               'source': 'match_rows', 'columns': ['invoice_id']})
     payload['steps'][-1]['source'] = 'select'
-    with pytest.raises(ValueError, match='no exported report'):
+    with pytest.raises(ValueError, match='omits that action|no exported report'):
         validate_requested_actions(Workflow.model_validate(payload), 'Flag matching invoices')
 
 

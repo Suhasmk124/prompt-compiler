@@ -69,7 +69,10 @@ def test_rejected_generation_can_be_repaired():
             if self.calls == 1:
                 raise GenerationRejected('Invalid structured response')
             assert 'provider rejected' in messages[-1]['content']
-            return Reply(json.dumps({'workflow': workflow.model_dump(), 'clarification': None}))
+            return Reply(json.dumps({'workflow': workflow.model_dump(), 'clarification': None,
+                                     'requirements': [{'request_excerpt': DEMOS['Invoice review'],
+                                                       'action': step.operation, 'step_ids': [step.id], 'output_columns': []}
+                                                      for step in workflow.steps if step.operation not in {'read', 'export'}]}))
     result = compile_workflow(DEMOS['Invoice review'], manifest, RepairProvider())
     assert result.workflow is not None
     assert len(result.attempts) == 2

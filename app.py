@@ -189,12 +189,14 @@ def comparison_panel(run):
 def condition_controls(condition, prefix):
     comparison = st.selectbox('Comparison · ' + condition.column, list(COMPARISONS),
         index=list(COMPARISONS).index(condition.comparison), format_func=lambda item: COMPARISONS[item], key=prefix + '_comparison')
-    if isinstance(condition.value, bool):
+    if comparison in {'is_null', 'not_null'}:
+        value = None
+    elif isinstance(condition.value, bool):
         value = st.checkbox('Match value', value=condition.value, key=prefix + '_value')
     elif isinstance(condition.value, (int, float)):
         value = st.number_input('Threshold · ' + condition.column, value=float(condition.value), step=1.0, key=prefix + '_value')
     else:
-        value = st.text_input('Match value · ' + condition.column, value=condition.value, key=prefix + '_value')
+        value = st.text_input('Match value · ' + condition.column, value=condition.value or '', key=prefix + '_value')
     case_sensitive = condition.case_sensitive
     if isinstance(condition.value, str):
         case_sensitive = st.checkbox('Case-sensitive · ' + condition.column, value=case_sensitive, key=prefix + '_case')
@@ -349,12 +351,12 @@ def describe_stage(settings, manifest, file_error):
         with st.container(border=True, key='panel_request'):
             section('01 · YOUR TASK', 'Tell us what needs doing')
             choices = ['Write your own task', *DEMOS]
-            st.session_state.setdefault('preset_picker', st.session_state.get('saved_preset', 'Invoice review'))
+            st.session_state.setdefault('preset_picker', st.session_state.get('saved_preset', 'Write your own task'))
             st.selectbox('Quick start', choices, index=None, key='preset_picker', on_change=pick_preset)
             st.session_state.setdefault('task_instruction', st.session_state['instruction_draft'])
             instruction = st.text_area('Your instruction', key='task_instruction', height=155, label_visibility='collapsed',
-                on_change=save_instruction, placeholder='Read this PDF, flag totals above INR 70,000, and create an Excel report…')
-            st.caption('Generating a plan sends your instruction and file names/columns to the configured model. File contents stay local.')
+                on_change=save_instruction, placeholder='Describe the filters, flags, calculations, grouping or report you need…')
+            st.caption('Generating a plan sends your instruction and file names, column names/types to the configured model. File contents stay local.')
             ready = bool(manifest) and not file_error and bool(instruction.strip()) and settings['configured']
             if st.button('✦ Generate plan', type='primary', width='stretch', disabled=not ready):
                 clear_plan()
@@ -454,7 +456,9 @@ def plan_stage(files, manifest, file_error):
         elif run:
             st.button('View current report →', on_click=go_to_stage, args=('result',))
         with st.expander('Technical details'):
-            st.caption('Imported workflow' if compilation.mode == 'imported' else f'{compilation.seconds:.2f}s · {len(compilation.attempts)} attempts · {compilation.prompt_tokens + compilation.completion_tokens:,} reported tokens')
+            st.caption('Imported workflow' if compilation.mode == 'imported' else f'{compilation.seconds:.2f}s · {compilation.api_calls} API request attempts · {len(compilation.attempts)} generation attempts · {compilation.prompt_tokens + compilation.completion_tokens:,} reported tokens')
+            if compilation.requirements:
+                st.json({'request_coverage': compilation.requirements})
             if compilation.decomposition:
                 st.text(compilation.decomposition)
             st.json(compilation.attempts)
@@ -469,7 +473,7 @@ def workspace(settings):
         st.session_state['active_files'] = {}
         st.session_state['guided_flow_version'] = 1
     files = st.session_state.setdefault('active_files', {})
-    st.session_state.setdefault('instruction_draft', DEMOS['Invoice review'])
+    st.session_state.setdefault('instruction_draft', '')
     manifest, file_error = {}, None
     try:
         if st.session_state.get('duplicate_uploads'):
@@ -478,7 +482,7 @@ def workspace(settings):
             manifest = inventory(files)
     except Exception as exc:
         file_error = str(exc)
-    fingerprint = hashlib.sha256(json.dumps({'compiler_revision': 'compound-conditions-v1', 'instruction': st.session_state['instruction_draft'],
+    fingerprint = hashlib.sha256(json.dumps({'compiler_revision': 'schema-aware-coverage-v2', 'instruction': st.session_state['instruction_draft'],
         'files': {n: hashlib.sha256(b).hexdigest() for n, b in files.items()},
         **{k: v for k, v in settings.items() if k != 'key'}}, sort_keys=True).encode()).hexdigest()
     if st.session_state.get('fingerprint') != fingerprint:

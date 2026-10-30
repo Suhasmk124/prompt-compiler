@@ -44,6 +44,14 @@ Comparison snapshots retain only the final report table, not every intermediate 
 
 The product has no offline/demo compiler mode or automatic preset fallback. Quick-start instructions are prompts for the actual model, not precompiled plans. Deterministic fixtures remain available only for backend regression checks and the explicitly labeled CLI development benchmark.
 
+## Schema-aware planning
+
+The compiler uses the current instruction and uploaded column names/types, without fixed field mappings.
+The response links requested actions to workflow steps; local coverage checks reject missing actions and
+required fields that disappear from exports. Text conditions are case-insensitive by default. Conditions
+include literal text matching and explicit missing-cell checks as well as numeric comparisons and AND/OR.
+See [schema-aware compilation](docs/schema-aware-compilation.md) for the pipeline, API-call visibility and limitations.
+
 ## Connect an LLM
 
 Configure your model in the local `.env` file and restart. Credentials, endpoints and model configuration are not rendered as UI fields. See `docs/model-setup.md`. Prior live smoke-test results are in `docs/live-validation.md`; the new PDF check is in `docs/pdf-validation.md`. Neither establishes general accuracy.

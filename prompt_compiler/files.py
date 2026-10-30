@@ -61,6 +61,18 @@ def inventory(files):
     result = {}
     for name, content in files.items():
         frame = read_file(name, content)
-        result[name] = {'columns': list(frame.columns), 'rows': len(frame),
+        column_types = {}
+        for column in frame.columns:
+            dtype = frame[column].dtype
+            if pd.api.types.is_bool_dtype(dtype):
+                kind = 'boolean'
+            elif pd.api.types.is_numeric_dtype(dtype):
+                kind = 'number'
+            elif pd.api.types.is_datetime64_any_dtype(dtype):
+                kind = 'datetime'
+            else:
+                kind = 'text'
+            column_types[column] = kind
+        result[name] = {'columns': list(frame.columns), 'column_types': column_types, 'rows': len(frame),
                         'kind': 'document' if 'text' in frame and Path(name).suffix.lower() in {'.txt', '.pdf'} else 'table'}
     return result

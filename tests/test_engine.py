@@ -113,7 +113,10 @@ class StubProvider:
 
 
 def envelope(workflow):
-    return json.dumps({'workflow': workflow, 'clarification': None})
+    requirements = [{'request_excerpt': DEMOS['Invoice review'], 'action': step['operation'],
+                     'step_ids': [step['id']], 'output_columns': []}
+                    for step in workflow['steps'] if step['operation'] not in {'read', 'export'}]
+    return json.dumps({'workflow': workflow, 'clarification': None, 'requirements': requirements})
 
 
 def test_feedback_repairs_invalid_column_and_tracks_tokens():
@@ -273,7 +276,7 @@ def test_strict_schema_uses_closed_objects_and_enum_constants():
     from prompt_compiler.schema import CompilerResponse
     schema = strict_schema(CompilerResponse.model_json_schema())
     assert schema['additionalProperties'] is False
-    assert schema['required'] == ['workflow', 'clarification']
+    assert schema['required'] == ['workflow', 'clarification', 'requirements']
     assert schema['$defs']['Read']['properties']['operation']['enum'] == ['read']
     assert 'title' not in schema['$defs']['Read']['properties']['id']
     assert 'title' in schema['$defs']['Workflow']['properties']

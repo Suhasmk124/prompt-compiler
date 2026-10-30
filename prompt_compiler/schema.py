@@ -28,9 +28,20 @@ class Extract(Transform):
 
 class Condition(StrictModel):
     column: str
-    comparison: Literal['gt', 'gte', 'lt', 'lte', 'eq', 'ne']
-    value: Union[float, str, bool]
+    comparison: Literal['gt', 'gte', 'lt', 'lte', 'eq', 'ne', 'contains', 'not_contains', 'starts_with', 'ends_with', 'is_null', 'not_null']
+    value: Union[float, str, bool, None]
     case_sensitive: bool = False
+
+    @model_validator(mode='after')
+    def comparison_value(self):
+        if self.comparison in {'is_null', 'not_null'}:
+            if self.value is not None:
+                raise ValueError('Missing-value checks require value=null.')
+        elif self.value is None:
+            raise ValueError('This comparison requires a value; use is_null/not_null to check missing cells.')
+        elif self.comparison in {'contains', 'not_contains', 'starts_with', 'ends_with'} and not isinstance(self.value, str):
+            raise ValueError('Text comparisons require a string value.')
+        return self
 
 
 class Predicate(Transform, Condition):
@@ -130,9 +141,17 @@ class Workflow(StrictModel):
         return self
 
 
+class TaskRequirement(StrictModel):
+    request_excerpt: str = Field(min_length=1, max_length=12000)
+    action: Literal['read', 'extract_invoices', 'filter', 'flag', 'calculate', 'aggregate', 'select', 'sort', 'export']
+    step_ids: list[str] = Field(min_length=1, max_length=30)
+    output_columns: list[str] = Field(max_length=200)
+
+
 class CompilerResponse(StrictModel):
     workflow: Workflow | None
     clarification: str | None
+    requirements: list[TaskRequirement] = Field(default_factory=list, max_length=60)
 
     @model_validator(mode='after')
     def exclusive(self):

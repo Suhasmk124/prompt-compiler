@@ -11,6 +11,9 @@ OP_NAMES = {'read': 'Read inputs', 'extract_invoices': 'Extract invoice fields',
             'flag': 'Flag records', 'calculate': 'Calculate values', 'aggregate': 'Summarize records',
             'select': 'Choose columns', 'sort': 'Sort records', 'export': 'Create report'}
 COMPARISONS = {'gt': 'greater than', 'gte': 'at least', 'lt': 'less than', 'lte': 'at most', 'eq': 'equal to', 'ne': 'not equal to'}
+COMPARISONS.update({'contains': 'contains text', 'not_contains': 'does not contain text',
+                    'starts_with': 'starts with', 'ends_with': 'ends with',
+                    'is_null': 'is missing', 'not_null': 'is not missing'})
 
 
 def describe_step(step):

@@ -47,14 +47,24 @@ def numeric(series):
 
 def predicate(frame, step):
     values = frame[step.column]
+    if step.comparison in {'is_null', 'not_null'}:
+        result = values.isna()
+        return (result if step.comparison == 'is_null' else ~result).astype('boolean')
     if isinstance(step.value, (float, int)) and not isinstance(step.value, bool):
         values = numeric(values)
     target = step.value
-    if isinstance(target, str) and step.comparison in {'eq', 'ne'} and not step.case_sensitive:
+    if isinstance(target, str) and not step.case_sensitive:
         # Match natural-language values such as "upi" against "UPI" without
         # altering the actual source data or converting missing values to text.
         values = values.astype('string').str.strip().str.casefold()
         target = target.strip().casefold()
+    if step.comparison in {'contains', 'not_contains', 'starts_with', 'ends_with'}:
+        text = values.astype('string')
+        if step.comparison in {'contains', 'not_contains'}:
+            result = text.str.contains(target, regex=False, na=pd.NA).astype('boolean')
+            return ~result if step.comparison == 'not_contains' else result
+        method = text.str.startswith if step.comparison == 'starts_with' else text.str.endswith
+        return method(target, na=pd.NA).astype('boolean')
     if step.column == 'total' and 'currency' in frame:
         if frame['currency'].isna().any() or set(frame['currency'].dropna()) - {'INR'}:
             raise ValueError('Invoice thresholds currently require explicit INR currency on every row.')

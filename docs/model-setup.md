@@ -38,3 +38,11 @@ Gemini 3.1 Flash-Lite also has a free API tier. Google directs developers to AI 
 - Groq structured output models: https://console.groq.com/docs/structured-outputs
 - Gemini pricing: https://ai.google.dev/gemini-api/docs/pricing
 - Gemini limits: https://ai.google.dev/gemini-api/docs/rate-limits
+
+## Provider HTTP 400 troubleshooting
+
+The adapter classifies known provider error codes without displaying raw response bodies or failed generations. A `json_validate_failed` rejection means the provider rejected the model's generated structured response; it does not by itself mean the API key is wrong. Plan + self-correction can repair these rejections within the existing retry budget. Standard does not retry. Usage reported for rejected generations is unavailable and is not included in local token totals.
+
+A rejected `response_format` or `invalid_json_schema` gets a separate configuration message. If strict schemas are unsupported, set `LLM_STRUCTURED=false` in the local `.env` and restart. This uses JSON mode with the schema in the prompt; local schema and semantic validation still run. The app does not silently switch formats or models. Unrecognized errors remain generic; no arbitrary provider error text is shown.
+
+These error paths are regression-tested with mocked responses, without HTTP requests. A live retry is needed to classify an earlier generic error; its cause cannot be recovered from the old message alone.

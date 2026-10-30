@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 import json
 import time
 from .schema import Workflow, CompilerResponse
-from .provider import strict_schema
+from .provider import strict_schema, GenerationRejected
 from .validation import validate_workflow
 from .demo import demo_workflow
 
@@ -66,7 +66,15 @@ def compile_workflow(instruction, manifest, provider=None, strategy='feedback', 
                 messages.append({'role': 'user', 'content': 'Proposed operation plan (validate against original request):\n' + reply.text})
             budget = max_retries if strategy == 'feedback' else 0
             for index in range(budget + 1):
-                reply = provider.complete(messages, schema)
+                try:
+                    reply = provider.complete(messages, schema)
+                except GenerationRejected as exc:
+                    result.attempts.append({'attempt': index + 1, 'schema_valid': False,
+                                            'semantic_valid': False, 'errors': [str(exc)],
+                                            'provider_rejected': True})
+                    if index < budget:
+                        messages.append({'role': 'user', 'content': 'The provider rejected the previous generation. Return only valid JSON matching the supplied schema, with all required properties. Preserve the original task.'})
+                    continue
                 result.prompt_tokens += reply.prompt_tokens
                 result.completion_tokens += reply.completion_tokens
                 attempt = {'attempt': index + 1, 'schema_valid': False, 'semantic_valid': False, 'errors': [], 'raw': reply.text}

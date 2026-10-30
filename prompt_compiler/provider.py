@@ -6,6 +6,35 @@ import urllib.error
 from urllib.parse import urlparse
 
 
+class GenerationRejected(ValueError):
+    """Provider rejected generated JSON; eligible for the compiler's bounded repair."""
+
+
+def provider_http_error(exc):
+    # Read a bounded body solely to classify known errors. Never surface arbitrary
+    # provider messages, failed generations, headers, URLs, or credentials.
+    code, param = None, None
+    try:
+        payload = exc.read(64_001)
+        if len(payload) <= 64_000:
+            error = json.loads(payload).get('error', {})
+            if isinstance(error, dict):
+                code, param = error.get('code'), error.get('param')
+    except Exception:
+        pass
+    if exc.code == 400 and code == 'json_validate_failed':
+        return GenerationRejected('The model generated output that the provider rejected as invalid JSON or an invalid structured response. Try Plan + self-correction or simplify the instruction.')
+    if exc.code == 400 and (param == 'response_format' or code in ('unsupported_response_format', 'invalid_json_schema')):
+        return ValueError('The provider rejected the structured-output format or schema. Check model support; if strict schemas are unsupported, set LLM_STRUCTURED=false in the local .env and restart. Local workflow validation remains enabled.')
+    if exc.code in (401, 403):
+        return ValueError('The provider denied access. Check the server-side API key and account permissions in your local .env.')
+    if exc.code == 404 or (exc.code == 400 and code in ('model_not_found', 'model_decommissioned')):
+        return ValueError('The provider could not find the endpoint or model. Check LLM_BASE_URL and LLM_MODEL in your local .env.')
+    if exc.code == 429:
+        return ValueError('The provider’s free-tier or rate limit was reached. Wait before trying again, or check your account’s remaining quota. No automatic paid upgrade was made.')
+    return ValueError(f'Provider HTTP {exc.code}: the request was rejected. No recognized error category was supplied. Check the endpoint, model and structured-output settings in your local .env. Raw response hidden to protect credentials.')
+
+
 @dataclass
 class Reply:
     text: str
@@ -56,9 +85,7 @@ class Provider:
             usage = result.get('usage', {})
             return Reply(message['content'], usage.get('prompt_tokens', 0), usage.get('completion_tokens', 0))
         except urllib.error.HTTPError as exc:
-            if exc.code == 429:
-                raise ValueError('The provider’s free-tier or rate limit was reached. Wait before trying again, or check your account’s remaining quota. No automatic paid upgrade was made.') from None
-            raise ValueError(f'Provider HTTP {exc.code}. Check endpoint, key, model, and structured-output support. Provider response omitted to protect credentials.') from None
+            raise provider_http_error(exc) from None
         except (urllib.error.URLError, TimeoutError):
             raise ValueError('Provider connection failed or timed out. Check endpoint and connectivity.') from None
 

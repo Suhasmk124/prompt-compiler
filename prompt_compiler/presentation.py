@@ -7,6 +7,7 @@ PROVIDERS = {
 }
 
 OP_NAMES = {'read': 'Read inputs', 'extract_invoices': 'Extract invoice fields', 'filter': 'Filter records',
+            'flag_rows': 'Flag matching records', 'filter_rows': 'Filter matching records',
             'flag': 'Flag records', 'calculate': 'Calculate values', 'aggregate': 'Summarize records',
             'select': 'Choose columns', 'sort': 'Sort records', 'export': 'Create report'}
 COMPARISONS = {'gt': 'greater than', 'gte': 'at least', 'lt': 'less than', 'lte': 'at most', 'eq': 'equal to', 'ne': 'not equal to'}
@@ -18,6 +19,9 @@ def describe_step(step):
         return f"Load {len(step.files)} file{'s' if len(step.files) != 1 else ''} into the workflow."
     if op == 'extract_invoices':
         return 'Find vendor names, totals and currencies in labeled invoices.'
+    if op in {'filter_rows', 'flag_rows'}:
+        joiner = ' AND ' if step.match == 'all' else ' OR '
+        return joiner.join(f'{c.column} {COMPARISONS[c.comparison]} {c.value}' for c in step.conditions)
     if op in {'filter', 'flag'}:
         value = f'{step.value:,.2f}'.rstrip('0').rstrip('.') if isinstance(step.value, float) else str(step.value)
         action = 'Mark rows where' if op == 'flag' else 'Keep rows where'

@@ -1,4 +1,4 @@
-from .schema import Workflow, Read, Extract, Filter, Flag, Calculate, Aggregate, Select, Sort
+from .schema import Workflow, Read, Extract, Filter, Flag, FilterRows, FlagRows, Calculate, Aggregate, Select, Sort
 
 INVOICE_COLUMNS = {'source_file', 'vendor', 'total', 'currency', 'extraction_status'}
 
@@ -28,6 +28,8 @@ def validate_workflow(workflow: Workflow, manifest: dict) -> None:
                 available = INVOICE_COLUMNS.copy()
             elif isinstance(step, (Filter, Flag, Sort)):
                 require([step.column])
+            elif isinstance(step, (FilterRows, FlagRows)):
+                require([condition.column for condition in step.conditions])
             elif isinstance(step, Calculate):
                 require([step.left] + ([step.right] if isinstance(step.right, str) else []))
             elif isinstance(step, Aggregate):
@@ -40,7 +42,7 @@ def validate_workflow(workflow: Workflow, manifest: dict) -> None:
                 if len(set(step.columns)) != len(step.columns):
                     raise ValueError('Selected columns must be unique.')
                 available = set(step.columns)
-            if isinstance(step, (Flag, Calculate, Aggregate)):
+            if isinstance(step, (Flag, FlagRows, Calculate, Aggregate)):
                 if not step.output_column.strip() or step.output_column in available:
                     raise ValueError(f'{step.id}: output_column must be a new, non-empty column.')
                 available.add(step.output_column)

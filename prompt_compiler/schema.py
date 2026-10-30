@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class StrictModel(BaseModel):
-    model_config = ConfigDict(extra='forbid')
+    model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
 
 
 class Node(StrictModel):
@@ -26,10 +26,15 @@ class Extract(Transform):
     operation: Literal['extract_invoices']
 
 
-class Predicate(Transform):
+class Condition(StrictModel):
     column: str
     comparison: Literal['gt', 'gte', 'lt', 'lte', 'eq', 'ne']
     value: Union[float, str, bool]
+    case_sensitive: bool = False
+
+
+class Predicate(Transform, Condition):
+    pass
 
 
 class Filter(Predicate):
@@ -38,6 +43,20 @@ class Filter(Predicate):
 
 class Flag(Predicate):
     operation: Literal['flag']
+    output_column: str
+
+
+class CompoundPredicate(Transform):
+    conditions: list[Condition] = Field(min_length=1, max_length=12)
+    match: Literal['all', 'any']
+
+
+class FilterRows(CompoundPredicate):
+    operation: Literal['filter_rows']
+
+
+class FlagRows(CompoundPredicate):
+    operation: Literal['flag_rows']
     output_column: str
 
 
@@ -73,7 +92,7 @@ class Export(Transform):
     filename: str = Field(pattern=r'^[a-zA-Z0-9][a-zA-Z0-9_-]{0,60}\.(xlsx|csv)$')
 
 
-Step = Annotated[Union[Read, Extract, Filter, Flag, Calculate, Aggregate, Select, Sort, Export], Field(discriminator='operation')]
+Step = Annotated[Union[Read, Extract, Filter, Flag, FilterRows, FlagRows, Calculate, Aggregate, Select, Sort, Export], Field(discriminator='operation')]
 
 
 class Workflow(StrictModel):

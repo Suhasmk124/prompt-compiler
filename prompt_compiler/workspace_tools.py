@@ -42,7 +42,10 @@ def remap_inputs(workflow: Workflow, bindings: dict[str, list[str]], manifest: d
 
 
 def update_parameters(workflow: Workflow, updates: dict[str, dict], manifest: dict) -> Workflow:
-    allowed = {'filter': {'comparison', 'value'}, 'flag': {'comparison', 'value'}, 'export': {'filename'}}
+    allowed = {'filter': {'comparison', 'value', 'case_sensitive'},
+               'flag': {'comparison', 'value', 'case_sensitive'},
+               'filter_rows': {'conditions', 'match'}, 'flag_rows': {'conditions', 'match'},
+               'export': {'filename'}}
     payload = workflow.model_dump()
     nodes = {s['id']: s for s in payload['steps']}
     for node_id, changes in updates.items():
@@ -53,6 +56,14 @@ def update_parameters(workflow: Workflow, updates: dict[str, dict], manifest: di
             raise ValueError('Only rule comparisons, rule values and export names can be changed here.')
         if 'value' in changes and isinstance(changes['value'], numbers.Real) and not math.isfinite(changes['value']):
             raise ValueError('Rule values must be finite.')
+        if 'conditions' in changes:
+            conditions = changes['conditions']
+            original = node.get('conditions', [])
+            if not isinstance(conditions, list) or len(conditions) != len(original):
+                raise ValueError('Rule edits must preserve the existing conditions.')
+            if any(not isinstance(c, dict) or c.get('column') != old['column']
+                   for c, old in zip(conditions, original)):
+                raise ValueError('Rule edits cannot change source columns; regenerate or edit the workflow JSON.')
         node.update(changes)
     revised = Workflow.model_validate(payload)
     validate_workflow(revised, manifest)

@@ -186,6 +186,21 @@ def comparison_panel(run):
         st.download_button('Save comparison · JSON', json.dumps(summary, indent=2), 'comparison.json', mime='application/json')
 
 
+def condition_controls(condition, prefix):
+    comparison = st.selectbox('Comparison · ' + condition.column, list(COMPARISONS),
+        index=list(COMPARISONS).index(condition.comparison), format_func=lambda item: COMPARISONS[item], key=prefix + '_comparison')
+    if isinstance(condition.value, bool):
+        value = st.checkbox('Match value', value=condition.value, key=prefix + '_value')
+    elif isinstance(condition.value, (int, float)):
+        value = st.number_input('Threshold · ' + condition.column, value=float(condition.value), step=1.0, key=prefix + '_value')
+    else:
+        value = st.text_input('Match value · ' + condition.column, value=condition.value, key=prefix + '_value')
+    case_sensitive = condition.case_sensitive
+    if isinstance(condition.value, str):
+        case_sensitive = st.checkbox('Case-sensitive · ' + condition.column, value=case_sensitive, key=prefix + '_case')
+    return {'comparison': comparison, 'value': value, 'case_sensitive': case_sensitive}
+
+
 def rule_controls(manifest):
     try:
         workflow = Workflow.model_validate_json(st.session_state.get('workflow_editor') or st.session_state['workflow_draft'])
@@ -199,15 +214,16 @@ def rule_controls(manifest):
                 prefix = digest + '_' + step.id
                 if step.operation in {'flag', 'filter'}:
                     st.text(step.label)
-                    comparison = st.selectbox('Comparison · ' + step.column, list(COMPARISONS),
-                        index=list(COMPARISONS).index(step.comparison), format_func=lambda item: COMPARISONS[item], key=prefix + '_comparison')
-                    if isinstance(step.value, bool):
-                        value = st.checkbox('Match value', value=step.value, key=prefix + '_value')
-                    elif isinstance(step.value, (int, float)):
-                        value = st.number_input('Threshold · ' + step.column, value=float(step.value), step=1.0, key=prefix + '_value')
-                    else:
-                        value = st.text_input('Match value · ' + step.column, value=step.value, key=prefix + '_value')
-                    updates[step.id] = {'comparison': comparison, 'value': value}
+                    updates[step.id] = condition_controls(step, prefix)
+                elif step.operation in {'flag_rows', 'filter_rows'}:
+                    st.text(step.label)
+                    match = st.selectbox('Combine conditions', ['all', 'any'], index=0 if step.match == 'all' else 1,
+                        format_func=lambda value: 'AND · all conditions' if value == 'all' else 'OR · any condition', key=prefix + '_match')
+                    conditions = []
+                    for index, condition in enumerate(step.conditions):
+                        changes = condition_controls(condition, prefix + '_' + str(index))
+                        conditions.append({'column': condition.column, **changes})
+                    updates[step.id] = {'match': match, 'conditions': conditions}
                 elif step.operation == 'export':
                     filename = st.text_input('Report filename', value=step.filename, key=prefix + '_filename')
                     updates[step.id] = {'filename': filename}
@@ -238,6 +254,15 @@ def results_panel(compilation, run):
         markup(f'<div class="stat-strip"><div><b>{len(frame):,}</b><small>ROWS</small></div><div><b>{len(frame.columns)}</b><small>COLUMNS</small></div><div><b>{seconds:.2f}s</b><small>RUN TIME</small></div></div>')
         query = st.text_input('Search report', placeholder='Find a vendor, amount, or any value…', key='report_search')
         visible = search_table(frame, query)
+        executed = Workflow.model_validate(st.session_state.get('executed_workflow') or compilation.workflow.model_dump())
+        flag_columns = list(dict.fromkeys(step.output_column for step in executed.steps
+            if step.operation in {'flag', 'flag_rows'} and step.output_column in frame.columns))
+        for column in flag_columns:
+            matched = int(frame[column].eq(True).sum())
+            unknown = int(frame[column].isna().sum())
+            st.caption(f'{column} · {matched:,} flagged · {len(frame) - matched - unknown:,} not flagged' + (f' · {unknown:,} unknown' if unknown else ''))
+        if flag_columns:
+            visible = visible[flag_columns + [name for name in visible.columns if name not in flag_columns]]
         st.dataframe(visible, hide_index=True, width='stretch', height=280)
         if query.strip():
             st.caption(f'{len(visible):,} of {len(frame):,} rows shown. Original reports are unchanged.')
@@ -453,7 +478,7 @@ def workspace(settings):
             manifest = inventory(files)
     except Exception as exc:
         file_error = str(exc)
-    fingerprint = hashlib.sha256(json.dumps({'instruction': st.session_state['instruction_draft'],
+    fingerprint = hashlib.sha256(json.dumps({'compiler_revision': 'compound-conditions-v1', 'instruction': st.session_state['instruction_draft'],
         'files': {n: hashlib.sha256(b).hexdigest() for n, b in files.items()},
         **{k: v for k, v in settings.items() if k != 'key'}}, sort_keys=True).encode()).hexdigest()
     if st.session_state.get('fingerprint') != fingerprint:

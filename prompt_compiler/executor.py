@@ -8,7 +8,7 @@ import operator
 import pandas as pd
 from openpyxl import load_workbook
 from .files import inventory, read_file
-from .schema import Workflow, Read, Extract, Filter, Flag, Calculate, Aggregate, Select, Sort, Export
+from .schema import Workflow, Read, Extract, Filter, Flag, FilterRows, FlagRows, Calculate, Aggregate, Select, Sort, Export
 from .validation import validate_workflow
 
 
@@ -49,13 +49,29 @@ def predicate(frame, step):
     values = frame[step.column]
     if isinstance(step.value, (float, int)) and not isinstance(step.value, bool):
         values = numeric(values)
+    target = step.value
+    if isinstance(target, str) and step.comparison in {'eq', 'ne'} and not step.case_sensitive:
+        # Match natural-language values such as "upi" against "UPI" without
+        # altering the actual source data or converting missing values to text.
+        values = values.astype('string').str.strip().str.casefold()
+        target = target.strip().casefold()
     if step.column == 'total' and 'currency' in frame:
         if frame['currency'].isna().any() or set(frame['currency'].dropna()) - {'INR'}:
             raise ValueError('Invoice thresholds currently require explicit INR currency on every row.')
     comparisons = {'gt': operator.gt, 'gte': operator.ge, 'lt': operator.lt,
                    'lte': operator.le, 'eq': operator.eq, 'ne': operator.ne}
-    result = comparisons[step.comparison](values, step.value).astype('boolean')
+    result = comparisons[step.comparison](values, target).astype('boolean')
     return result.mask(values.isna(), pd.NA)
+
+
+def compound_predicate(frame, step):
+    results = [predicate(frame, condition) for condition in step.conditions]
+    combined = results[0]
+    for condition in results[1:]:
+        # Nullable Boolean logic: false AND unknown is false; true OR unknown
+        # is true. Otherwise unknown remains explicit.
+        combined = combined & condition if step.match == 'all' else combined | condition
+    return combined
 
 
 def export_table(frame, filename):
@@ -104,13 +120,13 @@ def execute(workflow: Workflow, files: dict[str, bytes]) -> Run:
                 frame = run.tables[step.source].copy()
                 if isinstance(step, Extract):
                     frame = pd.DataFrame([extract_invoice(row) for _, row in frame.iterrows()])
-                elif isinstance(step, Filter):
-                    condition = predicate(frame, step)
+                elif isinstance(step, (Filter, FilterRows)):
+                    condition = compound_predicate(frame, step) if isinstance(step, FilterRows) else predicate(frame, step)
                     if condition.isna().any():
                         raise ValueError('Filter encountered missing values; resolve them before excluding rows.')
                     frame = frame.loc[condition].reset_index(drop=True)
-                elif isinstance(step, Flag):
-                    frame[step.output_column] = predicate(frame, step)
+                elif isinstance(step, (Flag, FlagRows)):
+                    frame[step.output_column] = compound_predicate(frame, step) if isinstance(step, FlagRows) else predicate(frame, step)
                 elif isinstance(step, Calculate):
                     left = numeric(frame[step.left])
                     right = numeric(frame[step.right]) if isinstance(step.right, str) else step.right

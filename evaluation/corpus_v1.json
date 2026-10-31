@@ -1,0 +1,851 @@
+{
+  "version": "validation_v1",
+  "notice": "New synthetic validation cases; not a blind held-out accuracy benchmark. Freeze the hash for each run.",
+  "cases": [
+    {
+      "id": "expense_and",
+      "split": "validation",
+      "instruction": "Filter expense records where Office is Mysuru and Settlement is card. Keep all matching records and original columns; export CSV.",
+      "files": {
+        "expenses.csv": "ID,Office,Settlement,Amount,Owner\nE1,mysuru,CARD,40,Ada\nE2,Mysuru,card,60,Ada\nE3,Pune,card,20,Bo\nE4,Mysuru,cash,90,Cy\nE5, MYSURU ,Card,10,Ada\n"
+      },
+      "import_options": {},
+      "reference_workflow": {
+        "version": "1.0",
+        "title": "Expense And",
+        "steps": [
+          {
+            "operation": "read",
+            "id": "input",
+            "label": "Input",
+            "files": [
+              "expenses.csv"
+            ]
+          },
+          {
+            "operation": "filter_rows",
+            "id": "matches",
+            "label": "Matches",
+            "conditions": [
+              {
+                "column": "Office",
+                "comparison": "eq",
+                "value": "Mysuru"
+              },
+              {
+                "column": "Settlement",
+                "comparison": "eq",
+                "value": "card"
+              }
+            ],
+            "match": "all",
+            "source": "input"
+          },
+          {
+            "operation": "export",
+            "id": "report",
+            "label": "Report",
+            "filename": "result.csv",
+            "source": "matches"
+          }
+        ]
+      },
+      "expected": {
+        "kind": "table",
+        "columns": [
+          "ID",
+          "Office",
+          "Settlement",
+          "Amount",
+          "Owner"
+        ],
+        "rows": [
+          [
+            "E1",
+            "mysuru",
+            "CARD",
+            40,
+            "Ada"
+          ],
+          [
+            "E2",
+            "Mysuru",
+            "card",
+            60,
+            "Ada"
+          ],
+          [
+            "E5",
+            " MYSURU ",
+            "Card",
+            10,
+            "Ada"
+          ]
+        ],
+        "forbidden_operations": [
+          "deduplicate",
+          "aggregate"
+        ]
+      }
+    },
+    {
+      "id": "nested_flag",
+      "split": "validation",
+      "instruction": "Flag rows where (Zone is east OR Score is at least 8) AND Disposition is ready. Call the flag Check. Preserve all original columns and add only Check; export CSV.",
+      "files": {
+        "assets.csv": "ID,Zone,Score,Disposition\nA,East,2,Ready\nB,West,9,Ready\nC,East,9,Hold\nD,West,2,Ready\nE,East,2,Hold\nF,West,9,Hold\nG,East,9,Ready\nH,West,2,Hold\n"
+      },
+      "import_options": {},
+      "reference_workflow": {
+        "version": "1.0",
+        "title": "Nested Flag",
+        "steps": [
+          {
+            "operation": "read",
+            "id": "input",
+            "label": "Input",
+            "files": [
+              "assets.csv"
+            ]
+          },
+          {
+            "operation": "flag_rows",
+            "id": "first_condition",
+            "label": "First condition",
+            "conditions": [
+              {
+                "column": "Zone",
+                "comparison": "eq",
+                "value": "east"
+              },
+              {
+                "column": "Score",
+                "comparison": "gte",
+                "value": 8
+              }
+            ],
+            "match": "any",
+            "output_column": "part",
+            "source": "input"
+          },
+          {
+            "operation": "flag_rows",
+            "id": "final_condition",
+            "label": "Final condition",
+            "conditions": [
+              {
+                "column": "part",
+                "comparison": "eq",
+                "value": true
+              },
+              {
+                "column": "Disposition",
+                "comparison": "eq",
+                "value": "ready"
+              }
+            ],
+            "match": "all",
+            "output_column": "Check",
+            "source": "first_condition"
+          },
+          {
+            "operation": "select",
+            "id": "output_columns",
+            "label": "Output columns",
+            "columns": [
+              "ID",
+              "Zone",
+              "Score",
+              "Disposition",
+              "Check"
+            ],
+            "source": "final_condition"
+          },
+          {
+            "operation": "export",
+            "id": "report",
+            "label": "Report",
+            "filename": "result.csv",
+            "source": "output_columns"
+          }
+        ]
+      },
+      "expected": {
+        "kind": "table",
+        "columns": [
+          "ID",
+          "Zone",
+          "Score",
+          "Disposition",
+          "Check"
+        ],
+        "rows": [
+          [
+            "A",
+            "East",
+            2,
+            "Ready",
+            true
+          ],
+          [
+            "B",
+            "West",
+            9,
+            "Ready",
+            true
+          ],
+          [
+            "C",
+            "East",
+            9,
+            "Hold",
+            false
+          ],
+          [
+            "D",
+            "West",
+            2,
+            "Ready",
+            false
+          ],
+          [
+            "E",
+            "East",
+            2,
+            "Hold",
+            false
+          ],
+          [
+            "F",
+            "West",
+            9,
+            "Hold",
+            false
+          ],
+          [
+            "G",
+            "East",
+            9,
+            "Ready",
+            true
+          ],
+          [
+            "H",
+            "West",
+            2,
+            "Hold",
+            false
+          ]
+        ]
+      }
+    },
+    {
+      "id": "grouped_cost",
+      "split": "validation",
+      "instruction": "Calculate LineCost as Quantity times UnitCost, group by Division and sum LineCost as Spend, select only Division and Spend, sort Spend descending, export CSV.",
+      "files": {
+        "purchases.csv": "Division,Quantity,UnitCost\nNorth,3,10\nSouth,5,8\nNorth,2,30\nNorth,-1,5\n"
+      },
+      "import_options": {},
+      "reference_workflow": {
+        "version": "1.0",
+        "title": "Grouped Cost",
+        "steps": [
+          {
+            "operation": "read",
+            "id": "input",
+            "label": "Input",
+            "files": [
+              "purchases.csv"
+            ]
+          },
+          {
+            "operation": "calculate",
+            "id": "line_cost",
+            "label": "Line cost",
+            "left": "Quantity",
+            "right": "UnitCost",
+            "arithmetic": "multiply",
+            "output_column": "LineCost",
+            "source": "input"
+          },
+          {
+            "operation": "aggregate",
+            "id": "totals",
+            "label": "Totals",
+            "group_by": [
+              "Division"
+            ],
+            "column": "LineCost",
+            "function": "sum",
+            "output_column": "Spend",
+            "source": "line_cost"
+          },
+          {
+            "operation": "select",
+            "id": "columns",
+            "label": "Columns",
+            "columns": [
+              "Division",
+              "Spend"
+            ],
+            "source": "totals"
+          },
+          {
+            "operation": "sort",
+            "id": "ordered",
+            "label": "Ordered",
+            "column": "Spend",
+            "descending": true,
+            "source": "columns"
+          },
+          {
+            "operation": "export",
+            "id": "report",
+            "label": "Report",
+            "filename": "result.csv",
+            "source": "ordered"
+          }
+        ]
+      },
+      "expected": {
+        "kind": "table",
+        "columns": [
+          "Division",
+          "Spend"
+        ],
+        "rows": [
+          [
+            "North",
+            85
+          ],
+          [
+            "South",
+            40
+          ]
+        ],
+        "order_sensitive": true
+      }
+    },
+    {
+      "id": "missing_filter",
+      "split": "validation",
+      "instruction": "Keep only rows where Completed is missing. Select only Ticket and Completed; export CSV.",
+      "files": {
+        "tickets.csv": "Ticket,Completed,Team\nR1,,Ops\nR2,N/A,Lab\nR3,,Lab\nR4,2026-10-31,Ops\n"
+      },
+      "import_options": {},
+      "reference_workflow": {
+        "version": "1.0",
+        "title": "Missing Filter",
+        "steps": [
+          {
+            "operation": "read",
+            "id": "input",
+            "label": "Input",
+            "files": [
+              "tickets.csv"
+            ]
+          },
+          {
+            "operation": "filter",
+            "id": "missing",
+            "label": "Missing",
+            "column": "Completed",
+            "comparison": "is_null",
+            "value": null,
+            "source": "input"
+          },
+          {
+            "operation": "select",
+            "id": "columns",
+            "label": "Columns",
+            "columns": [
+              "Ticket",
+              "Completed"
+            ],
+            "source": "missing"
+          },
+          {
+            "operation": "export",
+            "id": "report",
+            "label": "Report",
+            "filename": "result.csv",
+            "source": "columns"
+          }
+        ]
+      },
+      "expected": {
+        "kind": "table",
+        "columns": [
+          "Ticket",
+          "Completed"
+        ],
+        "rows": [
+          [
+            "R1",
+            null
+          ],
+          [
+            "R3",
+            null
+          ]
+        ]
+      }
+    },
+    {
+      "id": "threshold_boundary",
+      "split": "validation",
+      "instruction": "Flag Value strictly above 50 as AboveLimit, keeping every row and all original columns. Export CSV.",
+      "files": {
+        "metrics.csv": "ID,Value\nA,49.99\nB,50\nC,50.01\n"
+      },
+      "import_options": {},
+      "reference_workflow": {
+        "version": "1.0",
+        "title": "Threshold Boundary",
+        "steps": [
+          {
+            "operation": "read",
+            "id": "input",
+            "label": "Input",
+            "files": [
+              "metrics.csv"
+            ]
+          },
+          {
+            "operation": "flag",
+            "id": "flagged",
+            "label": "Flagged",
+            "column": "Value",
+            "comparison": "gt",
+            "value": 50,
+            "output_column": "AboveLimit",
+            "source": "input"
+          },
+          {
+            "operation": "export",
+            "id": "report",
+            "label": "Report",
+            "filename": "result.csv",
+            "source": "flagged"
+          }
+        ]
+      },
+      "expected": {
+        "kind": "table",
+        "columns": [
+          "ID",
+          "Value",
+          "AboveLimit"
+        ],
+        "rows": [
+          [
+            "A",
+            49.99,
+            false
+          ],
+          [
+            "B",
+            50,
+            false
+          ],
+          [
+            "C",
+            50.01,
+            true
+          ]
+        ]
+      }
+    },
+    {
+      "id": "text_identifier",
+      "split": "validation",
+      "instruction": "Filter records where Code equals the text \"0002\". Preserve original columns and export CSV.",
+      "files": {
+        "codes.csv": "Code,Label\n001,First\n0002,Second\n010,Third\n"
+      },
+      "import_options": {
+        "codes.csv": {
+          "column_types": {
+            "Code": "text"
+          }
+        }
+      },
+      "reference_workflow": {
+        "version": "1.0",
+        "title": "Text Identifier",
+        "steps": [
+          {
+            "operation": "read",
+            "id": "input",
+            "label": "Input",
+            "files": [
+              "codes.csv"
+            ]
+          },
+          {
+            "operation": "filter",
+            "id": "matched",
+            "label": "Matched",
+            "column": "Code",
+            "comparison": "eq",
+            "value": "0002",
+            "source": "input"
+          },
+          {
+            "operation": "export",
+            "id": "report",
+            "label": "Report",
+            "filename": "result.csv",
+            "source": "matched"
+          }
+        ]
+      },
+      "expected": {
+        "kind": "table",
+        "columns": [
+          "Code",
+          "Label"
+        ],
+        "rows": [
+          [
+            "0002",
+            "Second"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "literal_contains",
+      "split": "validation",
+      "instruction": "Keep records whose Description contains the literal text [b], ignoring case. Select Ticket and Description only. Export CSV.",
+      "files": {
+        "repairs.csv": "Ticket,Description\nT1,Valve [B]\nT2,Valve B\nT3,Pipe [b] repair\nT4,Bracket C\n"
+      },
+      "import_options": {},
+      "reference_workflow": {
+        "version": "1.0",
+        "title": "Literal Contains",
+        "steps": [
+          {
+            "operation": "read",
+            "id": "input",
+            "label": "Input",
+            "files": [
+              "repairs.csv"
+            ]
+          },
+          {
+            "operation": "filter",
+            "id": "contains",
+            "label": "Contains",
+            "column": "Description",
+            "comparison": "contains",
+            "value": "[b]",
+            "source": "input"
+          },
+          {
+            "operation": "select",
+            "id": "columns",
+            "label": "Columns",
+            "columns": [
+              "Ticket",
+              "Description"
+            ],
+            "source": "contains"
+          },
+          {
+            "operation": "export",
+            "id": "report",
+            "label": "Report",
+            "filename": "result.csv",
+            "source": "columns"
+          }
+        ]
+      },
+      "expected": {
+        "kind": "table",
+        "columns": [
+          "Ticket",
+          "Description"
+        ],
+        "rows": [
+          [
+            "T1",
+            "Valve [B]"
+          ],
+          [
+            "T3",
+            "Pipe [b] repair"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "dedup_last",
+      "split": "validation",
+      "instruction": "Remove duplicates by Contact ignoring case and surrounding whitespace. Keep the last occurrence, preserve original columns, sort Row ascending and export CSV.",
+      "files": {
+        "contacts.csv": "Row,Contact,Note\n1,a@demo.example,old\n2, A@DEMO.EXAMPLE ,new\n3,b@demo.example,other\n"
+      },
+      "import_options": {},
+      "reference_workflow": {
+        "version": "1.0",
+        "title": "Dedup Last",
+        "steps": [
+          {
+            "operation": "read",
+            "id": "input",
+            "label": "Input",
+            "files": [
+              "contacts.csv"
+            ]
+          },
+          {
+            "operation": "deduplicate",
+            "id": "unique",
+            "label": "Unique",
+            "columns": [
+              "Contact"
+            ],
+            "keep": "last",
+            "case_sensitive": false,
+            "source": "input"
+          },
+          {
+            "operation": "sort",
+            "id": "ordered",
+            "label": "Ordered",
+            "column": "Row",
+            "descending": false,
+            "source": "unique"
+          },
+          {
+            "operation": "export",
+            "id": "report",
+            "label": "Report",
+            "filename": "result.csv",
+            "source": "ordered"
+          }
+        ]
+      },
+      "expected": {
+        "kind": "table",
+        "columns": [
+          "Row",
+          "Contact",
+          "Note"
+        ],
+        "rows": [
+          [
+            2,
+            " A@DEMO.EXAMPLE ",
+            "new"
+          ],
+          [
+            3,
+            "b@demo.example",
+            "other"
+          ]
+        ],
+        "order_sensitive": true
+      }
+    },
+    {
+      "id": "calendar_days",
+      "split": "validation",
+      "instruction": "Calculate signed calendar days from Opened to Closed as Elapsed. Dates use YYYY-MM-DD. Preserve all original columns; export CSV.",
+      "files": {
+        "dates.csv": "ID,Opened,Closed\nD1,2024-02-28,2024-03-01\nD2,2024-03-01,2024-02-28\nD3,2024-03-01,\n"
+      },
+      "import_options": {},
+      "reference_workflow": {
+        "version": "1.0",
+        "title": "Calendar Days",
+        "steps": [
+          {
+            "operation": "read",
+            "id": "input",
+            "label": "Input",
+            "files": [
+              "dates.csv"
+            ]
+          },
+          {
+            "operation": "date_difference",
+            "id": "days",
+            "label": "Days",
+            "start_column": "Opened",
+            "end_column": "Closed",
+            "start_format": "%Y-%m-%d",
+            "end_format": "%Y-%m-%d",
+            "output_column": "Elapsed",
+            "source": "input"
+          },
+          {
+            "operation": "export",
+            "id": "report",
+            "label": "Report",
+            "filename": "result.csv",
+            "source": "days"
+          }
+        ]
+      },
+      "expected": {
+        "kind": "table",
+        "columns": [
+          "ID",
+          "Opened",
+          "Closed",
+          "Elapsed"
+        ],
+        "rows": [
+          [
+            "D1",
+            "2024-02-28",
+            "2024-03-01",
+            2
+          ],
+          [
+            "D2",
+            "2024-03-01",
+            "2024-02-28",
+            -2
+          ],
+          [
+            "D3",
+            "2024-03-01",
+            null,
+            null
+          ]
+        ]
+      }
+    },
+    {
+      "id": "ambiguous_price",
+      "split": "validation",
+      "instruction": "Flag records whose price is above 100. Ask which price column if ambiguous.",
+      "files": {
+        "prices.csv": "List Price,Net Price\n120,90\n"
+      },
+      "import_options": {},
+      "reference_workflow": null,
+      "expected": {
+        "kind": "clarification",
+        "keywords": [
+          "price"
+        ]
+      }
+    },
+    {
+      "id": "unsupported_join",
+      "split": "validation",
+      "instruction": "Join people.csv and scores.csv on ID and export Name and Score.",
+      "files": {
+        "people.csv": "ID,Name\n1,Ada\n",
+        "scores.csv": "ID,Score\n1,9\n"
+      },
+      "import_options": {},
+      "reference_workflow": null,
+      "expected": {
+        "kind": "clarification",
+        "keywords": [
+          "join"
+        ]
+      }
+    },
+    {
+      "id": "invalid_numeric",
+      "split": "validation",
+      "instruction": "Calculate Total as Units times Price using the existing fields and export CSV. Do not guess or replace invalid values; execution must stop if numeric conversion fails.",
+      "files": {
+        "values.csv": "ID,Units,Price\nA,five,10\nB,2,20\n"
+      },
+      "import_options": {},
+      "reference_workflow": {
+        "version": "1.0",
+        "title": "Invalid Numeric",
+        "steps": [
+          {
+            "operation": "read",
+            "id": "input",
+            "label": "Input",
+            "files": [
+              "values.csv"
+            ]
+          },
+          {
+            "operation": "calculate",
+            "id": "total",
+            "label": "Total",
+            "left": "Units",
+            "right": "Price",
+            "arithmetic": "multiply",
+            "output_column": "Total",
+            "source": "input"
+          },
+          {
+            "operation": "export",
+            "id": "report",
+            "label": "Report",
+            "filename": "result.csv",
+            "source": "total"
+          }
+        ]
+      },
+      "expected": {
+        "kind": "execution_error",
+        "columns": null,
+        "rows": null,
+        "error_contains": "non-numeric"
+      }
+    },
+    {
+      "id": "zero_division",
+      "split": "validation",
+      "instruction": "Calculate PerUnit as Amount divided by Count and export CSV. Do not substitute values when division is invalid.",
+      "files": {
+        "ratios.csv": "ID,Amount,Count\nA,10,0\nB,20,2\n"
+      },
+      "import_options": {},
+      "reference_workflow": {
+        "version": "1.0",
+        "title": "Zero Division",
+        "steps": [
+          {
+            "operation": "read",
+            "id": "input",
+            "label": "Input",
+            "files": [
+              "ratios.csv"
+            ]
+          },
+          {
+            "operation": "calculate",
+            "id": "ratio",
+            "label": "Ratio",
+            "left": "Amount",
+            "right": "Count",
+            "arithmetic": "divide",
+            "output_column": "PerUnit",
+            "source": "input"
+          },
+          {
+            "operation": "export",
+            "id": "report",
+            "label": "Report",
+            "filename": "result.csv",
+            "source": "ratio"
+          }
+        ]
+      },
+      "expected": {
+        "kind": "execution_error",
+        "columns": null,
+        "rows": null,
+        "error_contains": "Division by zero"
+      }
+    }
+  ]
+}

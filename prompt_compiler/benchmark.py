@@ -20,7 +20,7 @@ def check_output(case, workflow, run):
     table = run.tables[workflow.steps[-1].id]
     try:
         if case == 'Invoice review':
-            flags = [s.output_column for s in workflow.steps if s.operation == 'flag']
+            flags = [s.output_column for s in workflow.steps if s.operation in {'flag', 'flag_rows'}]
             return any(sorted(table[['vendor', 'total', name]].itertuples(index=False, name=None)) == [
                 ('Acme Supplies', 50000, False), ('Acme Supplies', 50001, True),
                 ('Delta Labs', 12500, False), ('Delta Labs', 75000, True)] for name in flags if name in table)
@@ -37,15 +37,16 @@ def check_output(case, workflow, run):
 def check_plan(case, workflow):
     steps = workflow.steps
     expected = {'Invoice review': 'flag', 'High-value invoices': 'filter', 'Vendor summary': 'aggregate'}[case]
-    ops = [s.operation for s in steps]
+    ops = [{'flag_rows': 'flag', 'filter_rows': 'filter'}.get(s.operation, s.operation) for s in steps]
     if not all(op in ops for op in ['read', 'extract_invoices', expected, 'export']):
         return False
     suffix = '.csv' if case == 'High-value invoices' else '.xlsx'
     if not any(s.operation == 'export' and s.filename.endswith(suffix) for s in steps):
         return False
     if expected in {'flag', 'filter'}:
-        transforms = [s for s in steps if s.operation == expected]
-        return any(s.column == 'total' and s.comparison == 'gt' and s.value == 50000 for s in transforms)
+        transforms = [s for s in steps if {'flag_rows':'flag','filter_rows':'filter'}.get(s.operation,s.operation) == expected]
+        return any(any(c.column == 'total' and c.comparison == 'gt' and c.value == 50000
+                       for c in (s.conditions if hasattr(s, 'conditions') else [s])) for s in transforms)
     return any(s.operation == 'aggregate' and 'vendor' in s.group_by and set(s.group_by) <= {'vendor', 'currency'}
                and s.column == 'total' and s.function == 'sum' for s in steps)
 
@@ -73,7 +74,7 @@ def run_suite(provider=None, strategy=None, pause_seconds=0, progress=None):
                    'execution_success': False, 'output_correct': False,
                    'automatic_retries': max(0, len(result.attempts) - 1), 'manual_corrections': None,
                    'prompt_tokens': result.prompt_tokens, 'completion_tokens': result.completion_tokens,
-                   'compile_seconds': result.seconds, 'error': result.error, 'attempts': result.attempts}
+                   'compile_seconds': result.seconds, 'api_calls': result.api_calls, 'error_kind': result.error_kind, 'error': result.error, 'attempts': result.attempts}
             if result.workflow:
                 row['workflow'] = result.workflow.model_dump()
                 row['workflow_correct'] = check_plan(case, result.workflow)
@@ -102,7 +103,7 @@ def main():
     args = parser.parse_args()
     load_dotenv()
     provider = Provider(os.getenv('LLM_BASE_URL', 'https://api.openai.com/v1'), os.getenv('LLM_MODEL', ''),
-                        os.getenv('LLM_API_KEY', ''), structured=not args.json_mode) if args.live else None
+                        os.getenv('LLM_API_KEY', ''), structured=not args.json_mode and os.getenv('LLM_STRUCTURED', 'false').lower() != 'false') if args.live else None
     rows = run_suite(provider, args.strategy, args.pause_seconds, progress=lambda message: print(message, flush=True))
     summary = {metric: sum(bool(r[metric]) for r in rows) / len(rows) for metric in
                ['first_attempt_schema_valid', 'final_workflow_valid', 'workflow_correct', 'execution_success', 'output_correct']}

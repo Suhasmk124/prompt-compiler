@@ -1,12 +1,33 @@
 """Presentation helpers. Dynamic content is escaped before entering markup."""
 from html import escape
 
+
+def landing_markup():
+    return '''<section class="landing-hero">
+      <div class="landing-eyebrow"><span></span> A little less manual. A lot more possible.</div>
+      <h1>Your words.<br>A workflow that <em>works.</em></h1>
+      <p class="landing-subtitle">Give your files a direction.<br>Turn a simple request into a clear plan and a useful report.</p>
+      <div class="hero-actions"><a class="hero-cta" href="#workspace-start">Build your workflow <span>↗</span></a>
+        <a class="hero-secondary" href="#workflow-possibilities">See what’s possible ↓</a></div>
+      <div class="product-showcase" aria-hidden="true">
+        <div class="showcase-halo"></div>
+        <div class="floating-card card-source"><span class="tiny-kicker">YOUR STARTING POINT</span><b>Files with potential.</b><div class="format-pills"><i>CSV</i><i>XLSX</i><i>PDF</i></div></div>
+        <div class="floating-card card-filter"><span class="card-symbol">⌕</span><b>Find what matters.</b><small>Filter & flag</small></div>
+        <div class="workflow-window"><div class="window-top"><span>✺</span> prompt compiler <i>example workflow</i></div>
+          <div class="window-body"><div class="mini-request">“Keep the rows I need.<br>Calculate. Summarize. Export.”</div>
+          <div class="mini-flow"><div><span>01</span><b>Your files</b><i>↘</i></div><div><span>02</span><b>A clear plan</b><i>↘</i></div><div><span>03</span><b>A useful report</b><i>↗</i></div></div></div></div>
+        <div class="floating-card card-calculate"><span class="tiny-kicker">MAKE IT ADD UP</span><b>From rows<br>to results.</b><div class="mini-bars"><i></i><i></i><i></i><i></i><i></i></div></div>
+        <div class="floating-card card-export"><span>↗</span><div><b>Ready to take away.</b><small>Excel & CSV reports</small></div></div>
+      </div>
+      <div class="possibility-strip" id="workflow-possibilities"><span>FILTER</span><i>✳</i><span>FLAG</span><i>✳</i><span>CALCULATE</span><i>✳</i><span>SUMMARIZE</span><i>✳</i><span>EXPORT</span></div>
+    </section>'''
+
 PROVIDERS = {
     'Groq': {'base_url': 'https://api.groq.com/openai/v1', 'model': 'openai/gpt-oss-20b'},
     'Custom endpoint': {'base_url': 'http://localhost:11434/v1', 'model': ''},
 }
 
-OP_NAMES = {'read': 'Read inputs', 'extract_invoices': 'Extract invoice fields', 'filter': 'Filter records',
+OP_NAMES = {'deduplicate': 'Remove duplicates', 'date_difference': 'Days between dates', 'read': 'Read inputs', 'extract_invoices': 'Extract invoice fields', 'filter': 'Filter records',
             'flag_rows': 'Flag matching records', 'filter_rows': 'Filter matching records',
             'flag': 'Flag records', 'calculate': 'Calculate values', 'aggregate': 'Summarize records',
             'select': 'Choose columns', 'sort': 'Sort records', 'export': 'Create report'}
@@ -35,6 +56,10 @@ def describe_step(step):
     if op == 'aggregate':
         group = ', '.join(step.group_by) if step.group_by else 'all records'
         return f'{step.function.capitalize()} of {step.column}, grouped by {group}.'
+    if op == 'deduplicate':
+        return f"Deduplicate {', '.join(step.columns) or 'all columns'}; keep {step.keep}."
+    if op == 'date_difference':
+        return f'{step.output_column} = days from {step.start_column} to {step.end_column}.'
     if op == 'select':
         return 'Keep ' + ', '.join(step.columns) + '.'
     if op == 'sort':

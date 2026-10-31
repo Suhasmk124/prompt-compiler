@@ -1,4 +1,4 @@
-from .schema import Workflow, Read, Extract, Filter, Flag, FilterRows, FlagRows, Calculate, Aggregate, Select, Sort
+from .schema import Workflow, Read, Extract, Filter, Flag, FilterRows, FlagRows, Calculate, Aggregate, Select, Sort, Deduplicate, DateDifference
 
 INVOICE_COLUMNS = {'source_file', 'vendor', 'total', 'currency', 'extraction_status'}
 
@@ -30,6 +30,12 @@ def validate_workflow(workflow: Workflow, manifest: dict) -> None:
                 require([step.column])
             elif isinstance(step, (FilterRows, FlagRows)):
                 require([condition.column for condition in step.conditions])
+            elif isinstance(step, Deduplicate):
+                require(step.columns)
+                if len(set(step.columns)) != len(step.columns):
+                    raise ValueError('Deduplication columns must be unique.')
+            elif isinstance(step, DateDifference):
+                require([step.start_column, step.end_column])
             elif isinstance(step, Calculate):
                 require([step.left] + ([step.right] if isinstance(step.right, str) else []))
             elif isinstance(step, Aggregate):
@@ -42,8 +48,10 @@ def validate_workflow(workflow: Workflow, manifest: dict) -> None:
                 if len(set(step.columns)) != len(step.columns):
                     raise ValueError('Selected columns must be unique.')
                 available = set(step.columns)
-            if isinstance(step, (Flag, FlagRows, Calculate, Aggregate)):
+            if isinstance(step, (Flag, FlagRows, Calculate, Aggregate, DateDifference)):
                 if not step.output_column.strip() or step.output_column in available:
                     raise ValueError(f'{step.id}: output_column must be a new, non-empty column.')
                 available.add(step.output_column)
+        if len(available) > 200:
+            raise ValueError('Result exceeds 200 columns; select fewer columns first.')
         columns[step.id] = available

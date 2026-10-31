@@ -45,6 +45,8 @@ def update_parameters(workflow: Workflow, updates: dict[str, dict], manifest: di
     allowed = {'filter': {'comparison', 'value', 'case_sensitive'},
                'flag': {'comparison', 'value', 'case_sensitive'},
                'filter_rows': {'conditions', 'match'}, 'flag_rows': {'conditions', 'match'},
+               'deduplicate': {'keep', 'case_sensitive'},
+               'date_difference': {'start_format', 'end_format'},
                'export': {'filename'}}
     payload = workflow.model_dump()
     nodes = {s['id']: s for s in payload['steps']}
@@ -53,7 +55,7 @@ def update_parameters(workflow: Workflow, updates: dict[str, dict], manifest: di
             raise ValueError('Parameter update refers to an unknown step.')
         node = nodes[node_id]
         if set(changes) - allowed.get(node['operation'], set()):
-            raise ValueError('Only rule comparisons, rule values and export names can be changed here.')
+            raise ValueError('Only rule values, duplicate handling, date formats and export names can be changed here.')
         if 'value' in changes and isinstance(changes['value'], numbers.Real) and not math.isfinite(changes['value']):
             raise ValueError('Rule values must be finite.')
         if 'conditions' in changes:
@@ -120,16 +122,19 @@ class Snapshot:
     workflow: dict
     input_fingerprint: str
     size_bytes: int
+    report_name: str = ''
 
 
-def retain_snapshot(previous, workflow, run, timestamp, input_fingerprint, budget_bytes=20_000_000):
+def retain_snapshot(previous, workflow, run, timestamp, input_fingerprint, budget_bytes=20_000_000, export_id=None):
     if run.error:
         return previous, None
-    frame = run.tables[workflow.steps[-1].id]
+    node_id = export_id or workflow.steps[-1].id
+    frame = run.tables[node_id]
+    report_name = next((step.filename for step in workflow.steps if step.id == node_id and step.operation == 'export'), '')
     size = int(frame.memory_usage(index=True, deep=True).sum())
     if size > min(4_000_000, budget_bytes):
         return previous, None
-    snapshot = Snapshot(uuid4().hex, workflow.title, timestamp, frame.copy(deep=True), workflow.model_dump(), input_fingerprint, size)
+    snapshot = Snapshot(uuid4().hex, workflow.title, timestamp, frame.copy(deep=True), workflow.model_dump(), input_fingerprint, size, report_name)
     kept, used = [snapshot], size
     for old in previous:
         if len(kept) < 5 and used + old.size_bytes <= budget_bytes:

@@ -8,9 +8,9 @@ It is a hosted open-weight model with a free API plan and strict structured-outp
 
 1. Create an API key in your own Groq account: https://console.groq.com/keys
 2. If no `.env` exists, copy `.env.example` to `.env` locally. Configure `LLM_BASE_URL`, `LLM_MODEL` and `LLM_API_KEY` there.
-3. For Groq use `https://api.groq.com/openai/v1`, `openai/gpt-oss-20b` and `LLM_STRUCTURED=true`.
+3. For Groq use `https://api.groq.com/openai/v1`, `openai/gpt-oss-20b` and `LLM_STRUCTURED=false` for the live-verified JSON-output route. Full workflow validation still runs locally.
 4. Restart with `.\.venv\Scripts\python.exe run_app.py`. New plan generation always uses your configured model. The app shows configuration status, not credentials or setup fields; no offline-mode toggle exists.
-5. Use **Planning preferences → Plan + self-correction**, the live-tested default. Standard uses fewer requests but reliability can differ.
+5. Use **Planning preferences → Automatic**, the default. It generates a compact plan, reviews plans and proposed clarifications, and permits up to two bounded corrections. Standard is the no-correction research baseline; planning variants remain available.
 
 Never commit the real `.env` or paste keys into workflow instructions. Credentials are never rendered as browser widgets. No account, key, billing plan or paid upgrade is created automatically.
 
@@ -46,3 +46,43 @@ The adapter classifies known provider error codes without displaying raw respons
 A rejected `response_format` or `invalid_json_schema` gets a separate configuration message. If strict schemas are unsupported, set `LLM_STRUCTURED=false` in the local `.env` and restart. This uses JSON mode with the schema in the prompt; local schema and semantic validation still run. The app does not silently switch formats or models. Unrecognized errors remain generic; no arbitrary provider error text is shown.
 
 These error paths are regression-tested with mocked responses, without HTTP requests. A live retry is needed to classify an earlier generic error; its cause cannot be recovered from the old message alone.
+
+
+## Response budgets and incomplete responses (30 October 2026)
+
+The adapter now sends `max_completion_tokens=4096` explicitly by default. Override it using the
+server-side `LLM_MAX_COMPLETION_TOKENS` setting (256–32768). The local `.env` is not changed by the
+application. A `finish_reason=length` response or empty content is rejected rather than treated as a
+complete planning checklist or executable plan. Larger budgets can increase token usage and quota
+pressure; they do not guarantee better interpretation.
+
+Live testing found empty planning outputs with exactly 2,048 reported completion tokens on difficult
+requests, alongside provider-rejected structured generations. These observations motivated explicit
+budgets; they do not prove that all earlier HTTP 400 errors had the same cause.
+
+Groq documents the response-budget parameter in its [API reference](https://console.groq.com/docs/api-reference)
+and retry headers in its [rate-limit guide](https://console.groq.com/docs/rate-limits).
+
+## Provider-format fix — 31 October 2026
+
+Live diagnostics reproduced malformed JSON inside a Groq `json_validate_failed` rejection, while an
+identical request could also succeed. This was a response-generation failure before row filtering.
+Strict mode is documented as supported by GPT-OSS; do not infer that the model lacks the feature.
+The observed issue concerns this application's actual requests.
+
+The active local configuration now uses JSON object output (`LLM_STRUCTURED=false`). Generated
+responses contain only title, steps and clarification; version and redundant requirement bookkeeping
+are handled locally. Full Pydantic, graph, column, preservation and independent meaning checks remain.
+The provider schema is limited to basic structure/enums; local validation still enforces patterns and
+bounds. No arbitrary JSON repair or fabricated replacement workflow is used.
+
+Groq GPT-OSS defaults to low reasoning effort and a 2048-token completion budget to reduce overhead.
+An explicit LLM_MAX_COMPLETION_TOKENS overrides that budget. Other providers do not receive the
+Groq-specific reasoning option. Budget selection does not guarantee staying inside every quota.
+
+If strict mode is deliberately enabled and generation is rejected, feedback mode can use a JSON-mode
+repair on a later attempt within the existing correction budget. The request is counted and the format
+change recorded. One-shot never makes a hidden repair request. Provider/quota failures remain explicit.
+
+Official references: [Structured outputs](https://console.groq.com/docs/structured-outputs),
+[reasoning effort](https://console.groq.com/docs/reasoning).

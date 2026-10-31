@@ -5,10 +5,11 @@ from io import BytesIO
 import re
 import time
 import operator
+import numpy as np
 import pandas as pd
 from openpyxl import load_workbook
 from .files import inventory, read_file
-from .schema import Workflow, Read, Extract, Filter, Flag, FilterRows, FlagRows, Calculate, Aggregate, Select, Sort, Export
+from .schema import Workflow, Read, Extract, Filter, Flag, FilterRows, FlagRows, Calculate, Aggregate, Select, Sort, Export, Deduplicate, DateDifference
 from .validation import validate_workflow
 
 
@@ -42,6 +43,8 @@ def numeric(series):
     values = pd.to_numeric(series, errors='coerce')
     if (series.notna() & values.isna()).any():
         raise ValueError(f'Column {series.name} contains non-numeric values; clean the input first.')
+    if np.isinf(values.dropna().astype(float)).any():
+        raise ValueError(f'Column {series.name} contains infinite values.')
     return values
 
 
@@ -117,15 +120,17 @@ def export_table(frame, filename):
     return payload
 
 
-def execute(workflow: Workflow, files: dict[str, bytes]) -> Run:
-    manifest = inventory(files)
+def execute(workflow: Workflow, files: dict[str, bytes], import_options=None) -> Run:
+    manifest = inventory(files, import_options)
+    import_options = import_options or {}
     validate_workflow(workflow, manifest)
     run = Run()
     for step in workflow.steps:
         start = time.perf_counter()
+        input_rows = sum(manifest[name]['rows'] for name in step.files) if isinstance(step, Read) else len(run.tables[step.source])
         try:
             if isinstance(step, Read):
-                frame = pd.concat([read_file(n, files[n]) for n in step.files], ignore_index=True)
+                frame = pd.concat([read_file(n, files[n], import_options.get(n)) for n in step.files], ignore_index=True)
             else:
                 frame = run.tables[step.source].copy()
                 if isinstance(step, Extract):
@@ -137,6 +142,26 @@ def execute(workflow: Workflow, files: dict[str, bytes]) -> Run:
                     frame = frame.loc[condition].reset_index(drop=True)
                 elif isinstance(step, (Flag, FlagRows)):
                     frame[step.output_column] = compound_predicate(frame, step) if isinstance(step, FlagRows) else predicate(frame, step)
+                elif isinstance(step, Deduplicate):
+                    keys = frame[step.columns or list(frame.columns)].copy()
+                    if not step.case_sensitive:
+                        for column in keys:
+                            keys[column] = keys[column].map(lambda value: value.strip().casefold() if isinstance(value, str) else value)
+                    keep = False if step.keep == 'none' else step.keep
+                    frame = frame.loc[~keys.duplicated(keep=keep)].reset_index(drop=True)
+                elif isinstance(step, DateDifference):
+                    def dates(column, date_format):
+                        values = frame[column]
+                        if pd.api.types.is_datetime64_any_dtype(values):
+                            return values.dt.normalize()
+                        # Explicit formats avoid silently interpreting ambiguous local dates.
+                        parsed = pd.to_datetime(values.astype('string'), format=date_format, errors='coerce', exact=True)
+                        if (values.notna() & parsed.isna()).any():
+                            raise ValueError(f'Column {column} contains invalid dates for {date_format}; choose the correct format or clean the input.')
+                        return parsed
+                    start_dates = dates(step.start_column, step.start_format)
+                    end_dates = dates(step.end_column, step.end_format)
+                    frame[step.output_column] = (end_dates - start_dates).dt.days.astype('Int64')
                 elif isinstance(step, Calculate):
                     left = numeric(frame[step.left])
                     right = numeric(frame[step.right]) if isinstance(step.right, str) else step.right
@@ -144,6 +169,7 @@ def execute(workflow: Workflow, files: dict[str, bytes]) -> Run:
                         raise ValueError('Division by zero is not allowed.')
                     frame[step.output_column] = {'add': operator.add, 'subtract': operator.sub,
                                                 'multiply': operator.mul, 'divide': operator.truediv}[step.arithmetic](left, right)
+                    numeric(frame[step.output_column])  # Reject overflow instead of exporting infinity.
                 elif isinstance(step, Aggregate):
                     if step.function != 'count':
                         frame[step.column] = numeric(frame[step.column])
@@ -157,6 +183,7 @@ def execute(workflow: Workflow, files: dict[str, bytes]) -> Run:
                     else:
                         value = getattr(frame[step.column], step.function)()
                         frame = pd.DataFrame([{step.output_column: value}])
+                    numeric(frame[step.output_column])
                 elif isinstance(step, Select):
                     frame = frame[step.columns]
                 elif isinstance(step, Sort):
@@ -167,7 +194,7 @@ def execute(workflow: Workflow, files: dict[str, bytes]) -> Run:
             if len(frame) > 100_000:
                 raise ValueError('Combined result exceeds 100,000 rows.')
             run.tables[step.id] = frame
-            run.trace.append({'node': step.id, 'operation': step.operation, 'status': 'success',
+            run.trace.append({'node': step.id, 'operation': step.operation, 'status': 'success', 'input_rows': input_rows,
                               'rows': len(frame), 'seconds': round(time.perf_counter() - start, 4)})
         except Exception as exc:
             run.error = f'{step.id}: {exc}'

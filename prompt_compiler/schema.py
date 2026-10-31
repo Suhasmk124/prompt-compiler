@@ -87,6 +87,22 @@ class Aggregate(Transform):
     output_column: str
 
 
+class Deduplicate(Transform):
+    operation: Literal['deduplicate']
+    columns: list[str] = Field(max_length=200)
+    keep: Literal['first', 'last', 'none']
+    case_sensitive: bool = False
+
+
+class DateDifference(Transform):
+    operation: Literal['date_difference']
+    start_column: str
+    end_column: str
+    start_format: Literal['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y']
+    end_format: Literal['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y']
+    output_column: str
+
+
 class Select(Transform):
     operation: Literal['select']
     columns: list[str] = Field(min_length=1)
@@ -103,7 +119,7 @@ class Export(Transform):
     filename: str = Field(pattern=r'^[a-zA-Z0-9][a-zA-Z0-9_-]{0,60}\.(xlsx|csv)$')
 
 
-Step = Annotated[Union[Read, Extract, Filter, Flag, FilterRows, FlagRows, Calculate, Aggregate, Select, Sort, Export], Field(discriminator='operation')]
+Step = Annotated[Union[Read, Extract, Filter, Flag, FilterRows, FlagRows, Calculate, Aggregate, Deduplicate, DateDifference, Select, Sort, Export], Field(discriminator='operation')]
 
 
 class Workflow(StrictModel):
@@ -126,8 +142,8 @@ class Workflow(StrictModel):
         exports = [s for s in self.steps if isinstance(s, Export)]
         if not exports:
             raise ValueError('At least one export node is required.')
-        if len({s.filename for s in exports}) != len(exports):
-            raise ValueError('Export filenames must be unique.')
+        if len({s.filename.casefold() for s in exports}) != len(exports):
+            raise ValueError('Export filenames must be unique, ignoring letter case.')
         reachable = set()
         def visit(node_id):
             reachable.add(node_id)
@@ -143,9 +159,9 @@ class Workflow(StrictModel):
 
 class TaskRequirement(StrictModel):
     request_excerpt: str = Field(min_length=1, max_length=12000)
-    action: Literal['read', 'extract_invoices', 'filter', 'flag', 'calculate', 'aggregate', 'select', 'sort', 'export']
-    step_ids: list[str] = Field(min_length=1, max_length=30)
-    output_columns: list[str] = Field(max_length=200)
+    action: Literal['read', 'extract_invoices', 'filter', 'filter_rows', 'flag', 'flag_rows', 'calculate', 'aggregate', 'select', 'sort', 'deduplicate', 'date_difference', 'export']
+    step_ids: list[str] = Field(min_length=1, max_length=30, description='IDs only of steps whose operation matches this requirement action (compound flag/filter aliases allowed). Do not include upstream read or downstream export IDs unless that is the declared action.')
+    output_columns: list[str] = Field(max_length=200, description='Only columns explicitly required in the FINAL exported report for this requirement. Not the columns available at this step. Use [] for intermediate inputs/calculations consumed by later steps.')
 
 
 class CompilerResponse(StrictModel):
@@ -158,3 +174,24 @@ class CompilerResponse(StrictModel):
         if (self.workflow is None) == (not self.clarification):
             raise ValueError('Return either a workflow or a non-empty clarification, never both.')
         return self
+
+
+class PlanResponse(StrictModel):
+    """Compact provider response; requirement bookkeeping is not generated."""
+    title: str | None
+    steps: list[Step] = Field(max_length=30)
+    clarification: str | None
+
+    @model_validator(mode='after')
+    def valid_outcome(self):
+        if self.clarification:
+            if self.steps:
+                raise ValueError('A clarification must not include a partial executable plan.')
+        elif not self.title or not self.steps:
+            raise ValueError('A supported task needs a title and executable steps.')
+        return self
+
+    def envelope(self):
+        return CompilerResponse(workflow=None if self.clarification else
+            Workflow(version='1.0', title=self.title, steps=self.steps),
+            clarification=self.clarification, requirements=[])

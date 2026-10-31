@@ -15,8 +15,8 @@ The typed workflow is the intermediate representation. Read nodes bind input nam
 - Discriminated node schemas, graph validation and schema propagation.
 - CSV/XLSX/document reading; labeled invoice extraction; predicates, arithmetic, grouping, selection and sorting.
 - Memory-based Excel/CSV exports and per-node execution traces.
-- Offline preset mode and configurable LLM compilation with three strategies.
-- Editable workflow UI and explicit execution.
+- Model-backed compilation, three research strategies and an operational Automatic repair policy. Deterministic fixtures are CLI/test development checks only.
+- Progressive editable workflow UI, explicit import rules, cancelable background generation and local execution.
 - Controlled compiler tests and deterministic development benchmarks.
 
 ## Remaining research work
@@ -52,3 +52,7 @@ The document lists September 21–28, October 19–25 and November 16–21, with
 ## Completion criteria
 
 The initial runnable app is not the final academic submission. Completion requires owner-run UI verification, configured live-model trials, a held-out benchmark, actual measured results, literature survey, presentation and the IEEE report.
+
+## Studio release evidence
+
+See `docs/research-report-draft.md` and `docs/studio-release.md` for the measured pilot, later fixes and current limitations. The 13-case corpus is validation material, not a blind held-out set. UI acceptance remains with the owner.

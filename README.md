@@ -1,123 +1,107 @@
 # Prompt Compiler
 
-## Natural Language to Validated Executable Workflows
+Turn natural-language instructions into reviewed, executable workflows over your files.
+A local Streamlit application for a prompt-engineering mini-project: schema-aware planning,
+validation, bounded correction, deterministic execution and output-based evaluation.
 
-A local prompt-engineering application that compiles instructions into typed workflows, validates their dependencies, executes predefined document and spreadsheet operations, and produces downloadable reports with an execution trace.
-
-**Current status:** Runnable local application with sample tasks, a model-backed compiler, workflow import/editing, file previews, searchable reports and ZIP exports. Three live development tasks previously passed; broader evaluation remains pending. UI acceptance belongs to the project owner.
-
-## Run on Windows
-
-From this project folder:
+## Run
 
 ```powershell
-.\start.ps1
-```
-
-The launcher creates a local `.venv` and installs `requirements.txt` if needed, then starts Streamlit at its printed local address. No activation or PowerShell execution-policy changes are needed when running the equivalent commands below:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+cd "C:\Sauce\PEGAI\Prompt Compiler"
 .\.venv\Scripts\python.exe run_app.py
 ```
 
-If your machine blocks PowerShell scripts, use those commands directly. For an existing environment, skip its creation and dependency installation.
+For first-time setup, `start.ps1` creates the environment and installs `requirements.txt`.
+Use the launcher rather than invoking Streamlit directly on Windows. Stop an old server with
+Ctrl+C before restarting. Provider settings stay in the local `.env`; never commit its key.
 
-## Guided workspace
+## Workspace
 
-1. Upload your files or select **Try example PDF**, then write a task and click **Generate plan**. Generation always uses the configured model.
-2. The workspace advances to **Review**, showing only the plan. Adjust rules or inspect JSON, then click **Run workflow**.
-3. A successful execution advances to **Report**, with search, downloads and comparisons. **Adjust plan** goes back without another model call.
+The white studio landing page opens into a progressive Describe → Plan → Result flow.
+Navigation, keyboard focus, button press states and reduced-motion behavior are supported.
+The interface is inspired by the owner's landing-page reference, with a code-built workflow
+illustration; it uses no external fonts, images, trackers or fabricated performance statistics.
+Browser acceptance remains with the owner.
 
-Only the current stage is shown; future-stage empty boxes do not occupy the page. Back navigation preserves the task, files, plan and current report until an edit invalidates them. Transitions, step entrances and decorative motion respect reduced-motion preferences. Browser verification belongs to the project owner.
+1. Upload CSV, XLSX, TXT or a selectable-text PDF and describe the desired outcome.
+2. Optionally configure each table column as text, number, boolean or an explicit date format.
+   Preview, model metadata and execution use the same import rules. Original bytes are preserved.
+3. Generate a plan. The interface stays responsive with real phase updates and a cancel control.
+4. Review or edit the plan, run it locally, then search/download/compare its reports.
 
-Upload directly into the drop zone. Preview documents or the first 100 table rows locally. Search filters the report preview only; matching rows can be downloaded separately. Download everything packages the executed plan, audit and reports into one ZIP. Saved workflow JSON can be imported with explicit bindings and executed locally without regenerating it.
+A plain filter keeps every matching source record. Asking for vendors/customers/products does
+not by itself request deduplication. Flagging preserves rows and adds a boolean column.
+Text comparisons are case-insensitive by default; the original cell values stay unchanged.
 
-### Reuse a plan without regenerating it
+## Generation and provider behavior
 
-- Import saved workflow JSON and explicitly bind each read step to the current uploads. New filenames and batch sizes are supported when the input schemas match.
-- Open **Adjust rules & output names** to change filter/flag thresholds, comparison operators, and report filenames or formats. Changes are validated and clear the old report; rerun locally to get the revised output.
-- After two successful runs, open **Compare with an earlier run** in the report panel. Comparison ignores row order, preserves duplicate counts, shows additions/removals, and reports schema differences. A modified row appears as a removal and an addition.
+New plans use the actual configured model. There is no product offline mode or preset fallback.
+The model receives instructions and file metadata, not raw rows or document contents. It chooses
+fields, predicates, boolean relationships and operations. Local code applies that plan to all rows.
 
-Comparison snapshots retain only the final report table, not every intermediate result. They stay in session memory, survive New workflow, and are limited to five snapshots, approximately 20 MB total, with 4 MB per report. Larger reports remain downloadable but are not saved for comparison. No snapshot files are automatically written. See `docs/reusing-workflows.md`.
+The default Automatic approach generates a compact plan, independently reviews its meaning, including proposed clarifications, and
+allows up to two bounded corrections if rejected. A normal successful plan uses two provider requests;
+corrections and explicit rate-limit retries can add calls. Standard, Plan first and Plan +
+self-correction remain available. API attempts and reported tokens appear in the audit.
 
-The product has no offline/demo compiler mode or automatic preset fallback. Quick-start instructions are prompts for the actual model, not precompiled plans. Deterministic fixtures remain available only for backend regression checks and the explicitly labeled CLI development benchmark.
+The local tested configuration is Groq GPT-OSS 20B with `LLM_STRUCTURED=false` (JSON output).
+Full local schema/graph/column checks remain enabled. See [model setup](docs/model-setup.md).
+The provider has bounded, cancelable Retry-After handling in the interactive application.
+Cancellation cannot undo a request already sent; it prevents later calls and discards the result.
 
-## Schema-aware planning
+## Operations and boundaries
 
-The compiler uses the current instruction and uploaded column names/types, without fixed field mappings.
-The response links requested actions to workflow steps; local coverage checks reject missing actions and
-required fields that disappear from exports. Text conditions are case-insensitive by default. Conditions
-include literal text matching and explicit missing-cell checks as well as numeric comparisons and AND/OR.
-See [schema-aware compilation](docs/schema-aware-compilation.md) for the pipeline, API-call visibility and limitations.
+- Read files and concatenate compatible schemas.
+- Filter or flag with single/compound conditions; numeric comparisons, literal text matching,
+  missing-value checks, AND/OR and composed nested conditions.
+- Add/subtract/multiply/divide numeric fields, group and aggregate one measure per operation.
+- Select columns, stable sort, deduplicate with explicit retention and calculate calendar-day differences.
+- Extract labeled invoice fields from one invoice per TXT/text PDF document.
+- Export formula-escaped CSV/XLSX; save/import/rebind workflow JSON; adjust rules locally.
+- Search results, download ZIP/audit bundles and compare session snapshots, including duplicate counts.
+- Select among multiple exported reports; preview and comparison are tied to that report.
 
-## Connect an LLM
+Not implemented: joins, OCR, general document extraction, multi-invoice PDFs, combined multi-measure
+summaries, timezone/business-day arithmetic, charts or external actions. No generated Python/eval/shell
+execution exists. Unsupported tasks must produce a specific limitation rather than a fake result.
 
-Configure your model in the local `.env` file and restart. Credentials, endpoints and model configuration are not rendered as UI fields. See `docs/model-setup.md`. Prior live smoke-test results are in `docs/live-validation.md`; the new PDF check is in `docs/pdf-validation.md`. Neither establishes general accuracy.
+Limits include 20 files, 10 MB each, 30 MB total, 100 PDF pages, 100,000 rows per table/result and
+200 columns. This is a local educational tool, not a hardened public multi-user service.
 
-Copy `.env.example` to `.env` only if no local `.env` exists. Set the endpoint, model and key there. Use a Chat Completions-compatible provider with JSON Schema support; set `LLM_STRUCTURED=false` for JSON mode only. Model compatibility varies, including support for `temperature=0`.
-
-Generating a plan sends the instruction, filenames, table column names and row counts to the locally configured provider. The UI explains this beside the generation button. Uploaded document contents stay local. No web search or arbitrary generated-code execution is available. Keys are not logged, written or displayed by the UI.
-
-Model calls use your provider plan. The owner explicitly authorized the latest PDF integration run; it used the configured Groq model to generate a new workflow. Backend regression tests remain separate and do not invoke a live model.
-
-## Supported operations
-
-| Operation | Behavior |
-| --- | --- |
-| `read` | Read TXT, text-based PDF, CSV, or the first XLSX worksheet; concatenate matching schemas |
-| `extract_invoices` | Extract labeled vendor, total, and currency from one invoice per document |
-| `filter` | Keep matching rows; fail explicitly if a comparison value is missing |
-| `flag` | Preserve rows and add a nullable boolean flag |
-| `calculate` | Add, subtract, multiply, or divide numeric columns/constants |
-| `aggregate` | Sum, mean, count non-null values, min, or max, with optional grouping |
-| `select` / `sort` | Choose columns or order rows |
-| `export` | Produce a formula-escaped Excel or CSV report |
-
-Invoice extraction recognizes explicit `Vendor:` or `Supplier:`, `Total:` / `Grand Total:` / `Invoice Total:` / `Amount due:`, and INR/USD/EUR markers. It is a conservative labeled-field parser, not general invoice intelligence. Conflicting totals or missing fields are marked `needs_review`. Invoice threshold comparisons require INR. Currency conversion, scanned PDFs, multi-invoice documents, and unconstrained extraction are not implemented.
-
-## Validation and output checks
-
-Pydantic validates shape and allowed operations; a semantic pass checks files, columns, dependencies, output collisions and graph reachability. Execution uses a fixed registry rather than `eval`, shell commands, or generated Python. Exports use basename-only filenames and neutralize formula-like strings. Export checks verify serialization/dimensions and absence of formulas; they do not prove that the workflow matches every nuance of the instruction.
-
-Inputs are limited to 20 files, 10 MB per file, 30 MB combined, 100 PDF pages, and 100,000 rows per table/result. Files are processed in the app session, not committed or automatically persisted. This is a local educational application, not a hardened multi-user document-processing service.
-
-## Non-browser checks
+## Tests and evaluation
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe -m prompt_compiler.benchmark --offline
+.\.venv\Scripts\python.exe -m prompt_compiler.evaluate --local --output outputs/reference-checks.json
 ```
 
-To explicitly run the three prompt strategies with your configured model:
+The versioned [validation corpus](evaluation/README.md) includes 13 cases, authored gold tables,
+runtime guards and clarification boundaries. Reference checks make no model calls. Explicit live
+runs compare real outputs/reopened exports, count requests/tokens and save corpus/implementation hashes.
+The live pilot is development validation, not held-out accuracy. See the release results notes.
+GitHub Actions is configured for backend tests and reference checks; a remote run must be confirmed
+separately after publication.
+
+The older three-invoice benchmark remains a development fixture harness, not the final research dataset.
+Model-authored declarations or a model review alone do not prove correctness.
+
+## Saved-plan CLI
 
 ```powershell
-.\.venv\Scripts\python.exe -m prompt_compiler.benchmark --live
+.\.venv\Scripts\python.exe -m prompt_compiler workflow.json --inputs inputs --output outputs --import-settings import_settings.json
 ```
 
-Reports are saved to ignored `outputs/benchmark.json`, including prompts' responses, validation errors, model identifier, timestamp, token usage, retries, reference checks and traces. The benchmark is a small **development suite**, not a held-out research dataset. Manual correction counts are left unmeasured (`null`), not reported as zero. The UI audit records whether the executed workflow differs from its generated version, not a count of human editing actions. Monetary cost requires applying the provider's actual prices to recorded token usage.
+`--import-settings` is optional. Existing reports are not overwritten.
 
-## Command-line execution
+## Documentation
 
-Save a workflow from the UI and place inputs in a directory:
+- [Import rules and recovery](docs/import-and-recovery.md)
+- [Owner acceptance checklist](docs/acceptance-checklist.md)
+- [Literature review](docs/literature-review.md)
+- [Project plan](docs/project-plan.md) and [IEEE report outline](docs/report-outline.md)
+- [Provider response fix and prior evidence](docs/provider-response-fix.md)
+- [Workflow reuse](docs/reusing-workflows.md)
 
-```powershell
-.\.venv\Scripts\python.exe -m prompt_compiler workflow.json --inputs inputs --output outputs
-```
-
-Existing output files are not overwritten. Workflow generation is available in the UI; this command executes an already compiled workflow.
-
-## Windows startup
-
-Use `run_app.py` or `start.ps1` rather than invoking Streamlit directly. The launcher selects a Windows socket event-loop policy to avoid the Proactor shutdown callback involved in the reported WinError 10054. This is a targeted mitigation, not suppression of errors. See `docs/troubleshooting.md`. The preset warning is separately fixed by initializing the select box from state without a competing explicit default.
-
-## Project materials
-
-- `docs/project-plan.md`: architecture, experiments, milestones, and review mapping.
-- `docs/manual-testing.md`: UI acceptance checklist for the project owner.
-- `docs/report-outline.md`: proposed 10-page IEEE report structure.
-- `docs/references.md`: official implementation references and literature-search topics.
-- `tests/test_engine.py`: execution, validation, export and compiler regression tests.
-
-Team names and experimental findings have not been invented. Keep real invoices, personal data, API keys and local logs out of this public repository.
+Academic completion still requires broader/repeated independent evaluation, owner UI acceptance,
+team-specific details, presentation and the faculty-formatted IEEE report. Do not invent measured
+accuracy, manual corrections, cost or research improvements. Keep private inputs and run logs out of Git.

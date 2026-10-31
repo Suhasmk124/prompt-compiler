@@ -8,7 +8,11 @@ from prompt_compiler.files import inventory
 from prompt_compiler.schema import Workflow
 from prompt_compiler.validation import validate_workflow
 from prompt_compiler.executor import execute, export_table
-from prompt_compiler.compiler import compile_workflow
+from prompt_compiler.compiler import compile_workflow as _compile_workflow
+from functools import partial
+# Existing fixtures isolate structural compilation; semantic-review requests
+# have their own explicit, local-only fixtures in test_semantic_review.py.
+compile_workflow = partial(_compile_workflow, verify_semantics=False)
 from prompt_compiler.provider import Reply, Provider
 from prompt_compiler.benchmark import run_suite
 

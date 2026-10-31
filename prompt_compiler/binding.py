@@ -32,7 +32,7 @@ def bind_workflow(workflow, manifest, instruction):
             available = list(manifest.get(step['files'][0], {}).get('columns', []))
         else:
             available = list(schemas.get(step['source'], []))
-            for field in ('column', 'left'):
+            for field in ('column', 'left', 'start_column', 'end_column'):
                 if field in step:
                     step[field] = resolve_name(step[field], available)
             if isinstance(step.get('right'), str):
@@ -52,7 +52,7 @@ def bind_workflow(workflow, manifest, instruction):
                 available = step['columns'].copy()
             elif operation == 'aggregate':
                 available = step['group_by'] + [step['output_column']]
-            elif operation in {'flag', 'flag_rows', 'calculate'}:
+            elif operation in {'flag', 'flag_rows', 'calculate', 'date_difference'}:
                 available.append(step['output_column'])
         schemas[step['id']] = available
     return Workflow.model_validate(payload)

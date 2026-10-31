@@ -1,4 +1,5 @@
 import argparse
+import json
 from pathlib import Path
 from .schema import Workflow
 from .executor import execute
@@ -9,10 +10,12 @@ def main():
     parser.add_argument('workflow', type=Path)
     parser.add_argument('--inputs', type=Path, required=True)
     parser.add_argument('--output', type=Path, default=Path('outputs'))
+    parser.add_argument('--import-settings', type=Path, help='Optional JSON import types/missing-value rules keyed by filename')
     args = parser.parse_args()
     workflow = Workflow.model_validate_json(args.workflow.read_text(encoding='utf-8-sig'))
     files = {p.name: p.read_bytes() for p in args.inputs.iterdir() if p.is_file()}
-    run = execute(workflow, files)
+    options = json.loads(args.import_settings.read_text(encoding='utf-8-sig')) if args.import_settings else None
+    run = execute(workflow, files, options)
     if run.error:
         parser.exit(1, run.error + '\n')
     args.output.mkdir(parents=True, exist_ok=True)

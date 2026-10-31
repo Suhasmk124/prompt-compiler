@@ -1,0 +1,5 @@
+Record ID,Opened,Closed,Notes
+A,2024-02-28,2024-03-01,original
+A,2024-02-28,2024-03-01,revised
+B,2024-03-01,2024-02-28,negative interval
+C,2024-03-01,,missing close date

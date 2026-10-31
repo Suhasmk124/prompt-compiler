@@ -1,0 +1,146 @@
+{
+  "instruction": "Calculate Revenue as Units times Price, group by Status and sum Revenue as TotalRevenue, select only Status and TotalRevenue, sort TotalRevenue descending, export report.xlsx.",
+  "response": {
+    "workflow": {
+      "title": "Revenue Report Workflow",
+      "version": "1.0",
+      "steps": [
+        {
+          "id": "step1",
+          "label": "Read work.csv",
+          "operation": "read",
+          "files": [
+            "work.csv"
+          ]
+        },
+        {
+          "id": "step2",
+          "label": "Calculate Revenue",
+          "operation": "calculate",
+          "source": "step1",
+          "left": "Units",
+          "right": "Price",
+          "arithmetic": "multiply",
+          "output_column": "Revenue"
+        },
+        {
+          "id": "step3",
+          "label": "Aggregate TotalRevenue by Status",
+          "operation": "aggregate",
+          "source": "step2",
+          "group_by": [
+            "Status"
+          ],
+          "column": "Revenue",
+          "function": "sum",
+          "output_column": "TotalRevenue"
+        },
+        {
+          "id": "step4",
+          "label": "Select Status and TotalRevenue",
+          "operation": "select",
+          "source": "step3",
+          "columns": [
+            "Status",
+            "TotalRevenue"
+          ]
+        },
+        {
+          "id": "step5",
+          "label": "Sort by TotalRevenue descending",
+          "operation": "sort",
+          "source": "step4",
+          "column": "TotalRevenue",
+          "descending": true
+        },
+        {
+          "id": "step6",
+          "label": "Export report.xlsx",
+          "operation": "export",
+          "source": "step5",
+          "filename": "report.xlsx"
+        }
+      ]
+    },
+    "clarification": null,
+    "requirements": [
+      {
+        "action": "read",
+        "request_excerpt": "Calculate Revenue as Units times Price, group by Status and sum Revenue as TotalRevenue, select only Status and TotalRevenue, sort TotalRevenue descending, export report.xlsx.",
+        "step_ids": [
+          "step1"
+        ],
+        "output_columns": [
+          "ID",
+          "Region",
+          "Units",
+          "Price",
+          "Status",
+          "Opened",
+          "Closed"
+        ]
+      },
+      {
+        "action": "calculate",
+        "request_excerpt": "Calculate Revenue as Units times Price",
+        "step_ids": [
+          "step2"
+        ],
+        "output_columns": [
+          "ID",
+          "Region",
+          "Units",
+          "Price",
+          "Status",
+          "Opened",
+          "Closed",
+          "Revenue"
+        ]
+      },
+      {
+        "action": "aggregate",
+        "request_excerpt": "group by Status and sum Revenue as TotalRevenue",
+        "step_ids": [
+          "step3"
+        ],
+        "output_columns": [
+          "Status",
+          "TotalRevenue"
+        ]
+      },
+      {
+        "action": "select",
+        "request_excerpt": "select only Status and TotalRevenue",
+        "step_ids": [
+          "step4"
+        ],
+        "output_columns": [
+          "Status",
+          "TotalRevenue"
+        ]
+      },
+      {
+        "action": "sort",
+        "request_excerpt": "sort TotalRevenue descending",
+        "step_ids": [
+          "step5"
+        ],
+        "output_columns": [
+          "Status",
+          "TotalRevenue"
+        ]
+      },
+      {
+        "action": "export",
+        "request_excerpt": "export report.xlsx",
+        "step_ids": [
+          "step6"
+        ],
+        "output_columns": [
+          "Status",
+          "TotalRevenue"
+        ]
+      }
+    ]
+  }
+}

@@ -5,7 +5,11 @@ from urllib.error import HTTPError
 import pytest
 
 from prompt_compiler.provider import Provider, GenerationRejected, Reply
-from prompt_compiler.compiler import compile_workflow
+from prompt_compiler.compiler import compile_workflow as _compile_workflow
+from functools import partial
+# Existing fixtures isolate structural compilation; semantic-review requests
+# have their own explicit, local-only fixtures in test_semantic_review.py.
+compile_workflow = partial(_compile_workflow, verify_semantics=False)
 from prompt_compiler.demo import DEMOS, sample_files, demo_workflow
 from prompt_compiler.files import inventory
 
@@ -22,6 +26,7 @@ def rejected(code, error):
     (401, {}, 'denied access'),
     (404, {}, 'endpoint or model'),
     (429, {}, 'rate limit'),
+    (413, {}, 'too large'),
     (400, {}, 'No recognized error category'),
 ])
 def test_http_errors_are_classified_without_exposing_provider_text(monkeypatch, status, error, expected):
@@ -78,3 +83,27 @@ def test_rejected_generation_can_be_repaired():
     assert len(result.attempts) == 2
     assert result.attempts[0]['provider_rejected']
     assert result.attempts[1]['semantic_valid']
+
+@pytest.mark.parametrize('finish,content,expected',[('length','{"partial":','output-token limit'),('stop','','no text content')])
+def test_incomplete_provider_responses_are_not_accepted(monkeypatch,finish,content,expected):
+    class Opener:
+        def open(self,*args,**kwargs):
+            return BytesIO(json.dumps({'choices':[{'finish_reason':finish,'message':{'content':content}}]}).encode())
+    monkeypatch.setattr('urllib.request.build_opener',lambda *args:Opener())
+    with pytest.raises(ValueError,match=expected):
+        Provider('https://example.invalid/v1','test').complete([])
+
+
+def test_response_budget_is_sent_and_configurable_server_side(monkeypatch):
+    bodies=[]
+    class Opener:
+        def open(self,request,**kwargs):
+            bodies.append(json.loads(request.data))
+            return BytesIO(b'{"choices":[{"finish_reason":"stop","message":{"content":"{}"}}]}')
+    monkeypatch.setattr('urllib.request.build_opener',lambda *args:Opener())
+    monkeypatch.setenv('LLM_MAX_COMPLETION_TOKENS','6144')
+    Provider('https://example.invalid/v1','test').complete([])
+    assert bodies[0]['max_completion_tokens']==6144
+    monkeypatch.setenv('LLM_MAX_COMPLETION_TOKENS','invalid')
+    with pytest.raises(ValueError,match='integer'):
+        Provider('https://example.invalid/v1','test')
